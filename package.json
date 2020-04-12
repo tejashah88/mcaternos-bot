@@ -1,0 +1,31 @@
+{
+  "name": "mcaternos-bot",
+  "version": "1.0.0",
+  "description": "A Discord bot that let's you remotely start your Aternos server without leaving Discord.",
+  "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tejashah88/mcaternos-bot.git"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "minecraft",
+    "aternos"
+  ],
+  "author": "Tejas Shah (tejashah88)",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/tejashah88/mcaternos-bot/issues"
+  },
+  "homepage": "https://github.com/tejashah88/mcaternos-bot#readme",
+  "dependencies": {
+    "discord.js": "^12.1.1",
+    "dotenv": "^8.2.0",
+    "nickjs": "^0.3.7"
+  }
+}
