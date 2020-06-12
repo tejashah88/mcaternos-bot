@@ -30,6 +30,7 @@ class AternosManager {
         this.console = null;
         this.user = null;
         this.pass = null;
+        this.currentStatus = null;
 
         this.nick = new Nick({
             printNavigation: !false,
@@ -104,13 +105,19 @@ class AternosManager {
     }
 
     async checkStatus() {
-        return await this.console.evaluate((arg, callback) => {
+        if (this.console.actionInProgress)
+            return null;
+
+        const results = await this.console.evaluate((arg, callback) => {
             const status = $('.statuslabel-label').text().toLowerCase().trim();
             const playerCount = $('#players').text().trim();
             const qTime = $('.queue-time').text().toLowerCase().trim().substring(4);
             const qPosition = $('.queue-position').text().toLowerCase().trim();
             callback(null, [status, playerCount, qTime, qPosition]);
         });
+
+        this.currentStatus = results[0];
+        return results;
     }
 
     async getServerIP() {
@@ -173,12 +180,8 @@ class AternosManager {
     }
 
     async startServer() {
-        let [serverStatus, playersOnline, queueEta, queuePos] = await this.checkStatus();
-
-        if (serverStatus == 'offline') {
+        if (this.currentStatus == 'offline')
             await this.console.click('#start');
-            await this.console.screenshot('start.png');
-        }
     }
 }
 

@@ -31,9 +31,12 @@ const BOT_CMDS = {
     StartServer: {
         name: 'start server',
         description: 'Starts the Aternos server.',
-        execute(msg, args) {
-            msg.channel.send('Starting the server...');
-            return Konsole.startServer();
+        async execute(msg, args) {
+            if (Konsole.currentStatus == 'offline') {
+                msg.channel.send('Starting the server...');
+                await Konsole.startServer();
+            } else
+                msg.channel.send(`Server is not offline! It is ${Konsole.currentStatus}`);
         },
     }
 };
@@ -48,7 +51,11 @@ async function fetchServerStatus(iter, stop) {
     if (isShuttingDown)
         return stop();
 
-    const [serverStatus, playersOnline, queueEta, queuePos] = await Konsole.checkStatus();
+    const results = await Konsole.checkStatus();
+    if (results == null)
+        return;
+
+    const [serverStatus, playersOnline, queueEta, queuePos] = results;
     let outputMsg;
 
     if (serverStatus == 'online') {
@@ -70,7 +77,7 @@ async function fetchServerStatus(iter, stop) {
         console.warn(`WARNING: Unknown status found when trying to start up server: ${serverStatus}`);
     }
 
-    bot.user.setPresence({
+    await bot.user.setPresence({
         status: 'online',
         activity: {
             name: `Server: ${serverStatus}`,
@@ -104,15 +111,14 @@ bot.on('message', msg => {
 
         // Remove the 'mention' argument
         const user = args.shift();
-        console.log('user', user);
 
         let command;
         if (args.length > 0)
-            command = args.shift().toLowerCase();
+            command = args.join(' ');
         else
             command = null;
 
-        console.info(`User '${user}' called command '${command}' with args '${args}'`);
+        console.info(`User '${user}' called command '${command}'`);
 
         if (!bot.commands.has(command)) return;
 
