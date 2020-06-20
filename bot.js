@@ -149,11 +149,19 @@ bot.on('message', msg => {
 // main code
 (async function() {
     try {
-        // Initialize the Aternos console access
-        await Konsole.initialize();
-
         // Log the bot into Discord
         await bot.login(config.discord.CHAT_TOKEN);
+
+        await bot.user.setPresence({
+            status: 'idle',
+            activity: {
+                name: 'Initializing...',
+                type: 'WATCHING',
+            }
+        });
+
+        // Initialize the Aternos console access
+        await Konsole.initialize();
 
         // Listen for Ctrl+C or uncaught exceptions to clean up bot
         diehard.listen();
