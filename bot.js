@@ -18,7 +18,7 @@ const interval = require('interval-promise');
 const Discord = require('discord.js');
 const bot = new Discord.Client();
 
-const { AternosManager, AternosException } = require('./aternos-manager');
+const { AternosManager, AternosStatus, AternosException } = require('./aternos-manager');
 
 let isShuttingDown = false;
 
@@ -56,31 +56,36 @@ async function fetchServerStatus(iter, stop) {
         return;
 
     const [serverStatus, playersOnline, queueEta, queuePos] = results;
-    let outputMsg;
+    let outputMsg, discordStatus;
 
-    if (serverStatus == 'online') {
+    if (serverStatus == AternosStatus.ONLINE) {
+        discordStatus = `Online ${playersOnline}`;
         outputMsg = `The server is already online with ${playersOnline} players!`;
-    } else if (serverStatus == 'offline') {
+    } else if (serverStatus == AternosStatus.OFFLINE) {
+        discordStatus = 'Offline';
         outputMsg = 'The server is currently offline!';
-    } else if (serverStatus == 'starting ...' || serverStatus == 'loading ...' || serverStatus == 'preparing ...') {
+    } else if ([AternosStatus.STARTING, AternosStatus.LOADING, AternosStatus.PREPARING].includes(serverStatus)) {
+        discordStatus = 'Starting up...';
         outputMsg = 'The server is starting up!';
-    } else if (serverStatus == 'waiting in queue') {
+    } else if (serverStatus == AternosStatus.IN_QUEUE) {
+        discordStatus = `In queue: ${queuePos}`;
         outputMsg = `The server is in queue for starting up. ETA is ${queueEta} and we're in position ${queuePos}`;
         await Konsole.clickConfirmNowIfNeeded();
-    } else if (serverStatus == 'saving ...') {
+    } else if ([AternosStatus.SAVING, AternosStatus.STOPPING].includes(serverStatus)) {
+        discordStatus = 'Shutting down...';
         outputMsg = 'The server is shutting down!';
-    } else if (serverStatus == 'crashed') {
+    } else if (serverStatus == AternosStatus.CRASHED) {
+        discordStatus = 'Crashed!';
         outputMsg = 'The server has crashed!';
-    } else if (serverStatus == 'stopping ...') {
-        outputMsg = 'The server is stopping!'
     } else {
-        console.warn(`WARNING: Unknown status found when trying to start up server: ${serverStatus}`);
+        discordStatus = serverStatus;
+        console.warn(`WARNING: Unknown status: '${serverStatus}'`);
     }
 
     await bot.user.setPresence({
         status: 'online',
         activity: {
-            name: `Server: ${serverStatus}`,
+            name: discordStatus,
             type: 'WATCHING',
         }
     });

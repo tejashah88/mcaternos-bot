@@ -10,6 +10,18 @@ const ATERNOS_CONSOLE_URL = 'https://aternos.org/server/';
 const MIN_RELOGIN_TIMEOUT = 10 * 60 * 1000;   // 10 minutes
 const WAIT_TIME_BETWEEN_PAGES = 3 * 1000;     // 3 seconds
 
+const AternosStatus = {
+    ONLINE:    'online',
+    OFFLINE:   'offline',
+    STARTING:  'starting ...',
+    LOADING:   'loading ...',
+    PREPARING: 'preparing ...',
+    IN_QUEUE:  'waiting in queue',
+    SAVING:    'saving ...',
+    STOPPING:  'stopping ...',
+    CRASHED:   'crashed'
+}
+
 // Source: https://gist.github.com/slavafomin/b164e3e710a6fc9352c934b9073e7216
 class AternosException extends Error {
     constructor (message, status) {
@@ -185,4 +197,4 @@ class AternosManager {
     }
 }
 
-module.exports = { AternosManager, AternosException };
+module.exports = { AternosManager, AternosStatus, AternosException };
