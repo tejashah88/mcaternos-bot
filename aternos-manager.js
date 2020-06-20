@@ -1,4 +1,5 @@
 const fs = require('fs');
+const EventEmitter = require('events').EventEmitter;
 
 const Nick = require('nickjs');
 
@@ -36,13 +37,15 @@ class AternosException extends Error {
     }
 }
 
-class AternosManager {
+class AternosManager extends EventEmitter {
     constructor(url) {
+        super();
         this.url = url;
         this.console = null;
         this.user = null;
         this.pass = null;
         this.currentStatus = null;
+        this.lastStatus = null;
 
         this.nick = new Nick({
             printNavigation: !false,
@@ -128,7 +131,12 @@ class AternosManager {
             callback(null, [status, playerCount, qTime, qPosition]);
         });
 
+        this.lastStatus = this.currentStatus;
         this.currentStatus = results[0];
+
+        if (this.currentStatus != null && this.lastStatus != null)
+            this.emit('onStatusUpdate', this.currentStatus, this.lastStatus);
+
         return results;
     }
 

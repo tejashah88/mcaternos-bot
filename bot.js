@@ -34,6 +34,16 @@ const BOT_CMDS = {
         async execute(msg, args) {
             if (Konsole.currentStatus == 'offline') {
                 msg.channel.send('Starting the server...');
+
+                function onDetectOnline(newStatus) {
+                    if (newStatus == AternosStatus.ONLINE) {
+                        msg.channel.send('Server is online!');
+                        Konsole.off('onStatusUpdate', onDetectOnline);
+                    }
+                }
+
+                Konsole.on('onStatusUpdate', onDetectOnline);
+
                 await Konsole.startServer();
             } else
                 msg.channel.send(`Server is not offline! It is ${Konsole.currentStatus}`);
