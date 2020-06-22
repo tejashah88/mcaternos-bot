@@ -83,14 +83,17 @@ class AternosManager extends EventEmitter {
     }
 
     async initialize() {
+        await this.login(this.user, this.pass);
+        await this.selectServerFromList();
+
         if (fs.existsSync(MAINTAINANCE_LOCK_FILE)) {
             const contents = await fs.promises.readFile(MAINTAINANCE_LOCK_FILE, 'utf-8');
             await this.toggleMaintainance(contents == 'true');
             console.log(`Konsole: Starting in ${this.isInMaintainance() ? 'maintainance' : 'production'} mode!`);
         }
 
-        await this.login(this.user, this.pass);
-        await this.selectServerFromList();
+        // Call this once to ensure that we have a status reading of the server
+        await this.checkStatus(true);
 
         interval(async (iter, stop) => {
             if (this.cleaningUp)
@@ -187,7 +190,7 @@ class AternosManager extends EventEmitter {
     }
 
     hasCrashed() {
-        return this.currentStatus == AternosStatus.CRASHED;
+        return this.currentStatus.serverStatus == AternosStatus.CRASHED;
     }
 
     async getServerIP() {
@@ -236,7 +239,7 @@ class AternosManager extends EventEmitter {
     }
 
     async startServer() {
-        if (this.currentStatus == 'offline')
+        if (this.currentStatus.serverStatus == AternosStatus.OFFLINE)
             await this.console.click('#start');
     }
 }

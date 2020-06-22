@@ -156,16 +156,10 @@ bot.on('message', async msg => {
         const command = msg.content.trim().split(/ +/).slice(1).join(' ');
         const isAdminUser = config.discord.ADMINS.includes(msg.author.tag);
 
-        if (command.length < 0)
+        if (command.length <= 0)
             return;
 
         console.info(`${isAdminUser ? 'Admin' : 'User'} '${msg.author.tag}' attempted to send command '${command}'`);
-
-        // Can't let anyone run bot commands when in maintainance mode
-        if (Konsole.isInMaintainance() && !isAdminUser) {
-            await msg.channel.send('**ALERT**: Bot is in maintainance mode and will ignore you unless told otherwise by the server admins!');
-            return;
-        }
 
         // Let user know if they typed an unknown command
         if (!bot.commands.has(command)) {
@@ -178,6 +172,12 @@ bot.on('message', async msg => {
         // Only admins should be able to run admin-only commands (duh!)
         if (cmd.adminOnly && !isAdminUser) {
             await msg.channel.send('This command is for admins only!');
+            return;
+        }
+
+        // Can't let anyone run bot commands when in maintainance mode
+        if (Konsole.isInMaintainance() && !isAdminUser) {
+            await msg.channel.send('**ALERT**: Bot is in maintainance mode and will ignore you unless told otherwise by the server admins!');
             return;
         }
 
@@ -203,14 +203,14 @@ bot.on('message', async msg => {
             }
         });
 
-        // Initialize the Aternos console access
-        await Konsole.initialize();
-
         // Attach listener for full server status
         Konsole.on('fullStatusUpdate', updateBotStatus);
 
-        // Attach listenenr for maintainance status update
+        // Attach listener for maintainance status update
         Konsole.on('maintainanceUpdate', onMaintainanceStatusUpdate)
+
+        // Initialize the Aternos console access
+        await Konsole.initialize();
 
         // Listen for Ctrl+C or uncaught exceptions to clean up bot
         diehard.listen();
