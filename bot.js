@@ -6,48 +6,82 @@ require('make-promises-safe');
 
 // Initialize libraries and variables
 const CONFIG_FILE = './config.ini';
-const STATUS_UPDATE_INTERVAL = 3 * 1000;
 
 const fs = require('fs');
 const ini = require('ini');
 const config = ini.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
 
 const diehard = require('diehard');
-const interval = require('interval-promise');
 
 const Discord = require('discord.js');
 const bot = new Discord.Client();
 
 const { AternosManager, AternosStatus, AternosException } = require('./aternos-manager');
 
-let isShuttingDown = false;
-
 // Totally not a KDE reference :P
 const Konsole = new AternosManager(config.aternos.SERVER_URL)
 Konsole.setLoginDetails(config.aternos.ATERNOS_USER, config.aternos.ATERNOS_PASS);
+
+async function onMaintainanceStatusUpdate(isMaintainanceEnabled) {
+    if (isMaintainanceEnabled) {
+        await bot.user.setPresence({
+            status: 'dnd',
+            activity: {
+                name: 'nobody!',
+                type: 'LISTENING',
+            }
+        });
+    } else
+        await Konsole.checkStatus(true);
+}
 
 // Command definitions
 const BOT_CMDS = {
     StartServer: {
         name: 'start server',
         description: 'Starts the Aternos server.',
-        async execute(msg, args) {
-            if (Konsole.currentStatus == 'offline') {
-                msg.channel.send('Starting the server...');
+        adminOnly: false,
+        async execute(msg) {
+            switch (Konsole.currentStatus.serverStatus) {
+                case AternosStatus.OFFLINE:
+                    await msg.channel.send('Starting the server...');
 
-                function onDetectOnline(newStatus) {
-                    if (newStatus == AternosStatus.ONLINE) {
-                        msg.channel.send('Server is online!');
-                        Konsole.off('onStatusUpdate', onDetectOnline);
+                    async function onDetectOnline(newStatus) {
+                        if (newStatus == AternosStatus.ONLINE) {
+                            await msg.channel.send('Server is online!');
+                            Konsole.off('statusUpdate', onDetectOnline);
+                        }
                     }
-                }
 
-                Konsole.on('onStatusUpdate', onDetectOnline);
+                    Konsole.on('statusUpdate', onDetectOnline);
 
-                await Konsole.startServer();
-            } else
-                msg.channel.send(`Server is not offline! It is ${Konsole.currentStatus}`);
-        },
+                    await Konsole.startServer();
+                    break;
+
+                case AternosStatus.CRASHED:
+                    await msg.channel.send('The server has crashed! Please wait while a server admin resolves the issue.')
+                    break;
+
+                default:
+                    await msg.channel.send(`Server is not offline! It is ${Konsole.currentStatus.serverStatus}`);
+            }
+        }
+    },
+    MaintainanceOn: {
+        name: 'maintainance on',
+        description: 'Enables maintainance mode. Only the owner is able to send commands to the bot if enabled.',
+        adminOnly: true,
+        async execute(msg) {
+            await Konsole.toggleMaintainance(true);
+        }
+    },
+    MaintainanceOff: {
+        name: 'maintainance off',
+        description: 'Disables maintainance mode. Everyone with access to the bot can send commands if enabled.',
+        adminOnly: true,
+        async execute(msg) {
+            await Konsole.toggleMaintainance(false);
+        }
     }
 };
 
@@ -57,16 +91,11 @@ Object.keys(BOT_CMDS).map(key => {
     bot.commands.set(BOT_CMDS[key].name, BOT_CMDS[key]);
 });
 
-async function fetchServerStatus(iter, stop) {
-    if (isShuttingDown)
-        return stop();
-
-    const results = await Konsole.checkStatus();
-    if (results == null)
-        console.warn('WARNING: Fetched server status and got nothing back!');
+async function updateBotStatus(newFullStatus) {
+    if (Konsole.isInMaintainance())
         return;
 
-    const [serverStatus, playersOnline, queueEta, queuePos] = results;
+    const { serverStatus, playersOnline, queueEta, queuePos } = newFullStatus;
     let outputMsg, discordStatus;
 
     if (serverStatus == AternosStatus.ONLINE) {
@@ -93,7 +122,7 @@ async function fetchServerStatus(iter, stop) {
         discordStatus = serverStatus;
         console.warn(`WARNING: Unknown status: '${serverStatus}'`);
     }
-
+    
     await bot.user.setPresence({
         status: 'online',
         activity: {
@@ -108,45 +137,54 @@ async function fetchServerStatus(iter, stop) {
 // Add listener for when bot is fully initialized
 bot.once('ready', () => {
     console.info(`Logged in as ${bot.user.tag}!`);
-    interval(fetchServerStatus, STATUS_UPDATE_INTERVAL);
 });
 
 // Add listener for when bot is shutting down
 diehard.register(async done => {
-    isShuttingDown = true;
     await bot.user.setPresence({ status: 'invisible' });
     await Konsole.cleanup();
     done();
 });
 
 // Add listener for bot to respond to messages
-bot.on('message', msg => {
-    const summoned = msg.mentions.users.has(bot.user.id)
+bot.on('message', async msg => {
+    const summoned = msg.mentions.users.has(bot.user.id);
 
+    // Check only if the bot has been explicitly summoned
     if (summoned) {
-        const args = msg.content.split(/ +/);
+        // Make sure to remove the 'mention' argument
+        const command = msg.content.trim().split(/ +/).slice(1).join(' ');
+        const isAdminUser = config.discord.ADMINS.includes(msg.author.tag);
 
-        // Remove the 'mention' argument
-        const user = args.shift();
+        if (command.length < 0)
+            return;
 
-        let command;
-        if (args.length > 0)
-            command = args.join(' ');
-        else
-            command = null;
+        console.info(`${isAdminUser ? 'Admin' : 'User'} '${msg.author.tag}' attempted to send command '${command}'`);
 
-        console.info(`User '${user}' called command '${command}'`);
-
-        if (!bot.commands.has(command)) {
-            msg.channel.send('I do not understand that command. Try `start server` if you want to start up the server');
+        // Can't let anyone run bot commands when in maintainance mode
+        if (Konsole.isInMaintainance() && !isAdminUser) {
+            await msg.channel.send('**ALERT**: Bot is in maintainance mode and will ignore you unless told otherwise by the server admins!');
             return;
         }
 
-        bot.commands.get(command)
-            .execute(msg, args)
+        // Let user know if they typed an unknown command
+        if (!bot.commands.has(command)) {
+            await msg.channel.send('I do not understand that command. Try `start server` if you want to start up the server');
+            return;
+        }
+
+        const cmd = bot.commands.get(command);
+
+        // Only admins should be able to run admin-only commands (duh!)
+        if (cmd.adminOnly && !isAdminUser) {
+            await msg.channel.send('This command is for admins only!');
+            return;
+        }
+
+        cmd.execute(msg)
             .catch(error => {
                 console.error(error);
-                msg.channel.send('There was an error trying to execute that command!');
+                return msg.channel.send('There was an error trying to execute that command!');
             });
     }
 });
@@ -167,6 +205,12 @@ bot.on('message', msg => {
 
         // Initialize the Aternos console access
         await Konsole.initialize();
+
+        // Attach listener for full server status
+        Konsole.on('fullStatusUpdate', updateBotStatus);
+
+        // Attach listenenr for maintainance status update
+        Konsole.on('maintainanceUpdate', onMaintainanceStatusUpdate)
 
         // Listen for Ctrl+C or uncaught exceptions to clean up bot
         diehard.listen();

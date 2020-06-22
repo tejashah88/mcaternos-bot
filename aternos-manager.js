@@ -1,6 +1,7 @@
 const fs = require('fs');
 const EventEmitter = require('events').EventEmitter;
 
+const interval = require('interval-promise');
 const Nick = require('nickjs');
 
 const JQUERY_VERSION = '3.5.1';
@@ -10,6 +11,9 @@ const ATERNOS_CONSOLE_URL = 'https://aternos.org/server/';
 
 const MIN_RELOGIN_TIMEOUT = 10 * 60 * 1000;   // 10 minutes
 const WAIT_TIME_BETWEEN_PAGES = 3 * 1000;     // 3 seconds
+const STATUS_UPDATE_INTERVAL = 3 * 1000;      // 3 seconds
+
+const MAINTAINANCE_LOCK_FILE = 'maintainance.lock';
 
 const AternosStatus = {
     ONLINE:    'online',
@@ -20,7 +24,8 @@ const AternosStatus = {
     IN_QUEUE:  'waiting in queue',
     SAVING:    'saving ...',
     STOPPING:  'stopping ...',
-    CRASHED:   'crashed'
+    CRASHED:   'crashed',
+    UNKNOWN:   null,
 }
 
 // Source: https://gist.github.com/slavafomin/b164e3e710a6fc9352c934b9073e7216
@@ -44,8 +49,12 @@ class AternosManager extends EventEmitter {
         this.console = null;
         this.user = null;
         this.pass = null;
+
         this.currentStatus = null;
         this.lastStatus = null;
+
+        this.maintainance = false;
+        this.cleaningUp = false;
 
         this.nick = new Nick({
             printNavigation: !false,
@@ -74,11 +83,26 @@ class AternosManager extends EventEmitter {
     }
 
     async initialize() {
+        if (fs.existsSync(MAINTAINANCE_LOCK_FILE)) {
+            const contents = await fs.promises.readFile(MAINTAINANCE_LOCK_FILE, 'utf-8');
+            await this.toggleMaintainance(contents == 'true');
+            console.log(`Konsole: Starting in ${this.isInMaintainance() ? 'maintainance' : 'production'} mode!`);
+        }
+
         await this.login(this.user, this.pass);
         await this.selectServerFromList();
+
+        interval(async (iter, stop) => {
+            if (this.cleaningUp)
+                return stop();
+
+            await this.checkStatus();
+        }, STATUS_UPDATE_INTERVAL)
     }
 
     async cleanup() {
+        this.cleaningUp = true;
+        this.removeAllListeners();
         this.nick.exit();
     }
 
@@ -119,25 +143,51 @@ class AternosManager extends EventEmitter {
         console.log('Konsole: Successfully logged in!');
     }
 
-    async checkStatus() {
-        if (this.console.actionInProgress)
-            return null;
+    async toggleMaintainance(newVal) {
+        this.maintainance = newVal;
+        await fs.promises.writeFile(MAINTAINANCE_LOCK_FILE, this.maintainance);
+        this.emit('maintainanceUpdate', this.maintainance);
+    }
+
+    isInMaintainance() {
+        return this.maintainance;
+    }
+
+    async checkStatus(forceUpdate) {
+        if (!this.console || this.console.actionInProgress)
+            return;
 
         const results = await this.console.evaluate((arg, callback) => {
             const status = $('.statuslabel-label').text().toLowerCase().trim();
             const playerCount = $('#players').text().trim();
             const qTime = $('.queue-time').text().toLowerCase().trim().substring(4);
             const qPosition = $('.queue-position').text().toLowerCase().trim();
-            callback(null, [status, playerCount, qTime, qPosition]);
+
+            callback(null, {
+                serverStatus: status,
+                playersOnline: playerCount,
+                queueEta: qTime,
+                queuePos: qPosition
+            });
         });
 
         this.lastStatus = this.currentStatus;
-        this.currentStatus = results[0];
+        this.currentStatus = results;
 
-        if (this.currentStatus != null && this.lastStatus != null)
-            this.emit('onStatusUpdate', this.currentStatus, this.lastStatus);
+        if (this.currentStatus != null) {
+            const currServerStatus = this.currentStatus.serverStatus;
+            const lastServerStatus = (this.lastStatus == null) ? null : this.lastStatus.serverStatus;
+            if (forceUpdate || currServerStatus != lastServerStatus) {
+                this.emit('statusUpdate', currServerStatus, lastServerStatus);
+                this.emit('fullStatusUpdate', this.currentStatus, this.lastStatus);
+            }
+        }
 
         return results;
+    }
+
+    hasCrashed() {
+        return this.currentStatus == AternosStatus.CRASHED;
     }
 
     async getServerIP() {
