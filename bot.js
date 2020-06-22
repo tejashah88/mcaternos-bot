@@ -137,7 +137,10 @@ bot.on('message', msg => {
 
         console.info(`User '${user}' called command '${command}'`);
 
-        if (!bot.commands.has(command)) return;
+        if (!bot.commands.has(command)) {
+            msg.channel.send('I do not understand that command. Try `start server` if you want to start up the server');
+            return;
+        }
 
         bot.commands.get(command)
             .execute(msg, args)
