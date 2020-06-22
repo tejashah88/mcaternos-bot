@@ -141,12 +141,10 @@ class AternosManager extends EventEmitter {
     }
 
     async getServerIP() {
-        const [playersOnline, serverIP] = await this.console.evaluate((arg, callback) => {
-            const [pplOnline, ip] = $('.statusinfo').text().trim().replace(/[ \n]+/g, ' ').split(' ');
-            callback(null, [pplOnline, ip]);
+        return await this.console.evaluate((arg, callback) => {
+            const serverIP = $('.server-ip')[0].firstChild.textContent.trim()
+            callback(null, serverIP);
         });
-
-        return serverIP;
     }
 
     async clickConfirmNowIfNeeded() {
