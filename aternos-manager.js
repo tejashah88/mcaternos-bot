@@ -75,7 +75,7 @@ class AternosManager extends EventEmitter {
 
     async initialize() {
         await this.login(this.user, this.pass);
-        await this.changeServerIfNeeded();
+        await this.selectServerFromList();
     }
 
     async cleanup() {
@@ -158,45 +158,33 @@ class AternosManager extends EventEmitter {
         });
     }
 
-    async changeServerIfNeeded() {
-        let serverIP = await this.getServerIP();
+    async selectServerFromList() {
+        await this.console.waitUntilVisible('.page-servers');
 
-        if (serverIP != this.url) {
-            console.log(`Konsole: Changing server IP from ${serverIP}...`);
+        // Selecte the correct server from the list
+        const errorMsg = await this.console.evaluate((arg, callback) => {
+            const targetName = arg.targetUrl.split('.').shift();
+            const serverIndex = $('.server-name', '.servers').map(function() {
+                return targetName == this.textContent.trim();
+            }).toArray().indexOf(true);
 
-            // Switch to the target server
-            const errorMsg = await this.console.evaluate((arg, callback) => {
-                // First, figure out which server, if there are multiple
-                const possibleServers = $('.friend-access-switch');
-                const altServerIndex = possibleServers.map((index, element) => {
-                    const url = element.textContent.trim().replace(/[ \n]+/g, ' ').split(' by ')[0];
-                    return url == arg.targetUrl;
-                }).toArray().indexOf(true);
+            if (serverIndex < 0) {
+                callback(null, 'Unable to locate server on Aternos console! Does this bot have access to the correct server on Aternos?');
+            } else {
+                // Access that server
+                $('.server')[serverIndex].click();
+                callback(null, null);
+            }
+        }, { 'targetUrl': this.url });
 
-                // Check that the server actually exists
-                if (altServerIndex < 0) {
-                    callback(null, 'Unable to locate server on Aternos console! Does this bot have access to the correct server on Aternos?');
-                } else {
-                    // Access that server
-                    $('.friend-access-count-dropdown').click();
-                    $('.friend-access-switch-icon-container')[altServerIndex].click();
-                    callback(null, null);
-                }
-            }, { 'targetUrl': this.url });
+        if (!!errorMsg)
+            throw new AternosException(errorMsg);
 
-            if (!!errorMsg)
-                throw new AternosException(errorMsg);
+        // Wait for the page to load
+        await this.console.wait(WAIT_TIME_BETWEEN_PAGES);
+        await this.console.untilVisible('.server-status');
 
-            // Wait for the page to load
-            await this.console.wait(WAIT_TIME_BETWEEN_PAGES);
-            await this.console.untilVisible('.server-status');
-
-            serverIP = await this.getServerIP();
-            if (serverIP != this.url)
-                throw AternosException('Unable to start server! Check that you have access to it.')
-
-            console.log(`Konsole: Successfully changed server IP to ${this.url}!`);
-        }
+        console.log(`Konsole: Successfully changed server IP to ${this.url}!`);
     }
 
     async startServer() {
