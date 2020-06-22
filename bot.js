@@ -63,6 +63,7 @@ async function fetchServerStatus(iter, stop) {
 
     const results = await Konsole.checkStatus();
     if (results == null)
+        console.warn('WARNING: Fetched server status and got nothing back!');
         return;
 
     const [serverStatus, playersOnline, queueEta, queuePos] = results;
@@ -70,23 +71,24 @@ async function fetchServerStatus(iter, stop) {
 
     if (serverStatus == AternosStatus.ONLINE) {
         discordStatus = `Online ${playersOnline}`;
-        outputMsg = `The server is already online with ${playersOnline} players!`;
+        outputMsg = `The server is online with ${playersOnline} players!`;
     } else if (serverStatus == AternosStatus.OFFLINE) {
         discordStatus = 'Offline';
-        outputMsg = 'The server is currently offline!';
-    } else if ([AternosStatus.STARTING, AternosStatus.LOADING, AternosStatus.PREPARING].includes(serverStatus)) {
+        outputMsg = 'The server is offline!';
+    } else if ([AternosStatus.STARTING, AternosStatus.LOADING].includes(serverStatus)) {
         discordStatus = 'Starting up...';
-        outputMsg = 'The server is starting up!';
-    } else if (serverStatus == AternosStatus.IN_QUEUE) {
+        outputMsg = 'The server is starting up...';
+    } else if ([AternosStatus.IN_QUEUE, AternosStatus.PREPARING].includes(serverStatus)) {
         discordStatus = `In queue: ${queuePos}`;
-        outputMsg = `The server is in queue for starting up. ETA is ${queueEta} and we're in position ${queuePos}`;
-        await Konsole.clickConfirmNowIfNeeded();
+        outputMsg = `The server is in queue. ETA is ${queueEta} and we're in position ${queuePos}`;
+        if (serverStatus == AternosStatus.IN_QUEUE)
+            await Konsole.clickConfirmNowIfNeeded();
     } else if ([AternosStatus.SAVING, AternosStatus.STOPPING].includes(serverStatus)) {
         discordStatus = 'Shutting down...';
-        outputMsg = 'The server is shutting down!';
+        outputMsg = 'The server is shutting down...';
     } else if (serverStatus == AternosStatus.CRASHED) {
         discordStatus = 'Crashed!';
-        outputMsg = 'The server has crashed!';
+        outputMsg = 'The server has crashed! The admin must resolve this in order for the bot to receive commands.';
     } else {
         discordStatus = serverStatus;
         console.warn(`WARNING: Unknown status: '${serverStatus}'`);
