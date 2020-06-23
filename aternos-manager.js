@@ -179,8 +179,12 @@ class AternosManager extends EventEmitter {
 
         if (this.currentStatus != null) {
             const currServerStatus = this.currentStatus.serverStatus;
+            const currPlayersOnline = this.currentStatus.playersOnline;
+            
             const lastServerStatus = (this.lastStatus == null) ? null : this.lastStatus.serverStatus;
-            if (forceUpdate || currServerStatus != lastServerStatus) {
+            const lastPlayersOnline = (this.lastStatus == null) ? null : this.lastStatus.playersOnline;
+
+            if (forceUpdate || (currServerStatus != lastServerStatus) || (currPlayersOnline != lastPlayersOnline)) {
                 this.emit('statusUpdate', currServerStatus, lastServerStatus);
                 this.emit('fullStatusUpdate', this.currentStatus, this.lastStatus);
             }
