@@ -42,28 +42,25 @@ const BOT_CMDS = {
         description: 'Starts the Aternos server.',
         adminOnly: false,
         async execute(msg) {
-            switch (Konsole.currentStatus.serverStatus) {
-                case AternosStatus.OFFLINE:
-                    await msg.channel.send('Starting the server...');
+            const isAdminUser = config.discord.ADMINS.includes(msg.author.tag);
 
-                    async function onDetectOnline(newStatus) {
-                        if (newStatus == AternosStatus.ONLINE) {
-                            await msg.channel.send('Server is online!');
-                            Konsole.off('statusUpdate', onDetectOnline);
-                        }
+            if (Konsole.hasCrashed() && !isAdminUser) {
+                await msg.channel.send('The server has crashed! Please wait while a server admin resolves the issue.')
+            } else if ([AternosStatus.OFFLINE, AternosStatus.CRASHED].includes(Konsole.currentStatus.serverStatus)) {
+                await msg.channel.send('Starting the server...');
+
+                async function onDetectOnline(newStatus) {
+                    if (newStatus == AternosStatus.ONLINE) {
+                        await msg.channel.send('Server is online!');
+                        Konsole.off('statusUpdate', onDetectOnline);
                     }
+                }
 
-                    Konsole.on('statusUpdate', onDetectOnline);
+                Konsole.on('statusUpdate', onDetectOnline);
 
-                    await Konsole.startServer();
-                    break;
-
-                case AternosStatus.CRASHED:
-                    await msg.channel.send('The server has crashed! Please wait while a server admin resolves the issue.')
-                    break;
-
-                default:
-                    await msg.channel.send(`Server is not offline! It is ${Konsole.currentStatus.serverStatus}`);
+                await Konsole.startServer();
+            } else {
+                await msg.channel.send(`Server is not offline! It is ${Konsole.currentStatus.serverStatus}`);
             }
         }
     },

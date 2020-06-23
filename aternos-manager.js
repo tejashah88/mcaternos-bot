@@ -243,8 +243,7 @@ class AternosManager extends EventEmitter {
     }
 
     async startServer() {
-        if (this.currentStatus.serverStatus == AternosStatus.OFFLINE)
-            await this.console.click('#start');
+        await this.console.click('#start');
     }
 }
 
