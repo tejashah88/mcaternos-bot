@@ -24,6 +24,7 @@
   },
   "homepage": "https://github.com/tejashah88/mcaternos-bot#readme",
   "dependencies": {
+    "deep-equal": "^2.0.3",
     "diehard": "^1.5.2",
     "discord.js": "^12.2.0",
     "ini": "^1.3.5",

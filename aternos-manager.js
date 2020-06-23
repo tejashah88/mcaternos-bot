@@ -2,6 +2,7 @@ const fs = require('fs');
 const EventEmitter = require('events').EventEmitter;
 
 const interval = require('interval-promise');
+const deepEqual = require('deep-equal');
 const Nick = require('nickjs');
 
 const JQUERY_VERSION = '3.5.1';
@@ -179,15 +180,13 @@ class AternosManager extends EventEmitter {
 
         if (this.currentStatus != null) {
             const currServerStatus = this.currentStatus.serverStatus;
-            const currPlayersOnline = this.currentStatus.playersOnline;
-            
             const lastServerStatus = (this.lastStatus == null) ? null : this.lastStatus.serverStatus;
-            const lastPlayersOnline = (this.lastStatus == null) ? null : this.lastStatus.playersOnline;
 
-            if (forceUpdate || (currServerStatus != lastServerStatus) || (currPlayersOnline != lastPlayersOnline)) {
+            if (forceUpdate || (currServerStatus != lastServerStatus))
                 this.emit('statusUpdate', currServerStatus, lastServerStatus);
+            
+            if (forceUpdate || !deepEqual(this.currentStatus, this.lastStatus))
                 this.emit('fullStatusUpdate', this.currentStatus, this.lastStatus);
-            }
         }
 
         return results;
