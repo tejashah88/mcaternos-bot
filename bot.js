@@ -14,7 +14,7 @@ const config = ini.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
 const Discord = require('discord.js');
 const bot = new Discord.Client();
 
-const { AternosManager, AternosStatus, AternosException } = require('./aternos-manager');
+const { AternosManager, AternosStatus, AternosException, ManagerStatus } = require('./aternos-manager');
 
 // Totally not a KDE reference :P
 const Konsole = new AternosManager({
@@ -34,6 +34,38 @@ async function onMaintainanceStatusUpdate(isMaintainanceEnabled) {
         });
     } else
         await Konsole.checkStatus(true);
+}
+
+async function onConsoleStatusUpdate(currStatus) {
+    switch (currStatus) {
+        case ManagerStatus.INITIALIZING:
+            await bot.user.setPresence({
+                status: 'idle',
+                activity: {
+                    name: 'Initializing...',
+                    type: 'WATCHING',
+                }
+            });
+        break;
+
+        case ManagerStatus.READY:
+            await Konsole.checkStatus(true);
+        break;
+
+        case ManagerStatus.RESTARTING:
+            await bot.user.setPresence({
+                status: 'idle',
+                activity: {
+                    name: 'Restarting...',
+                    type: 'WATCHING',
+                }
+            });
+        break;
+
+        case ManagerStatus.STOPPING:
+            bot.user.setPresence({ status: 'invisible' });
+        break;
+    }
 }
 
 // Command definitions
@@ -59,7 +91,7 @@ const BOT_CMDS = {
 
                 Konsole.on('statusUpdate', onDetectOnline);
 
-                await Konsole.startServer();
+                await Konsole.requestStartServer();
             } else {
                 await msg.channel.send(`Server is not offline! It is ${Konsole.currentStatus.serverStatus}`);
             }
@@ -90,7 +122,7 @@ Object.keys(BOT_CMDS).map(key => {
 });
 
 async function updateBotStatus(newFullStatus) {
-    if (Konsole.isInMaintainance())
+    if (!Konsole.isReady() || Konsole.isInMaintainance())
         return;
 
     const { serverStatus, playersOnline, queueEta, queuePos } = newFullStatus;
@@ -137,17 +169,19 @@ bot.once('ready', () => {
     console.info(`Logged in as ${bot.user.tag}!`);
 });
 
-function botCleanup() {
-    Promise.all([
-        bot.user.setPresence({ status: 'invisible' }),
-        Konsole.cleanup()
-    ]).then(() => process.exit(0));
+async function botCleanup() {
+    await bot.user.setPresence({ status: 'invisible' });
+    await Konsole.cleanup();
+}
+
+function processExitListener() {
+    botCleanup().then(() => process.exit(0));
 }
 
 // Add listener for when bot is shutting down
-process.on('SIGINT', botCleanup);
-process.on('SIGTERM', botCleanup);
-process.on('SIGQUIT', botCleanup);
+process.on('SIGINT', processExitListener);
+process.on('SIGTERM', processExitListener);
+process.on('SIGQUIT', processExitListener);
 
 // Add listener for bot to respond to messages
 bot.on('message', async msg => {
@@ -198,19 +232,14 @@ bot.on('message', async msg => {
         // Log the bot into Discord
         await bot.login(config.discord.CHAT_TOKEN);
 
-        await bot.user.setPresence({
-            status: 'idle',
-            activity: {
-                name: 'Initializing...',
-                type: 'WATCHING',
-            }
-        });
-
         // Attach listener for full server status
         Konsole.on('fullStatusUpdate', updateBotStatus);
 
         // Attach listener for maintainance status update
         Konsole.on('maintainanceUpdate', onMaintainanceStatusUpdate)
+
+        // Attach listener for manager status update
+        Konsole.on('internalStatusUpdate', onConsoleStatusUpdate);
 
         // Initialize the Aternos console access
         await Konsole.initialize();

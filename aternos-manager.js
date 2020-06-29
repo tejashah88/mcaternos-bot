@@ -14,8 +14,8 @@ const ATERNOS_CONSOLE_URL       = 'https://aternos.org/server/';
 
 const LOGIN_DELAY = 5 * 1000;                      // 5 seconds
 const STATUS_UPDATE_INTERVAL = 3 * 1000;           // 3 seconds
+const DELAY_BEFORE_CLEANUP = 5 * 1000;             // 5 seconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
-// const MAX_MEMORY_ALLOWED = 150 * 1024 * 1024; // 150 MB
 
 const MAINTAINANCE_LOCK_FILE = 'maintainance.lock';
 
@@ -30,6 +30,13 @@ const AternosStatus = {
     STOPPING:  'stopping ...',
     CRASHED:   'crashed',
     UNKNOWN:   null,
+}
+
+const ManagerStatus = {
+    INITIALIZING: 1,
+    READY:        2,
+    RESTARTING:   4,
+    STOPPING:     8,
 }
 
 // Source: https://gist.github.com/slavafomin/b164e3e710a6fc9352c934b9073e7216
@@ -59,7 +66,10 @@ class AternosManager extends EventEmitter {
         this.lastStatus = null;
 
         this.maintainance = false;
-        this.cleaningUp = false;
+        this.internalStatus = null;
+        this.prevInternalStatus = null;
+
+        this.setStatus(ManagerStatus.INITIALIZING);
     }
 
     async initialize() {
@@ -79,17 +89,23 @@ class AternosManager extends EventEmitter {
         await this.checkStatus(true);
 
         interval(async (iter, stop) => {
-            if (this.cleaningUp)
+            if ([ManagerStatus.STOPPING, ManagerStatus.RESTARTING].includes(this.getStatus()))
                 return stop();
 
             await this.checkStatus();
+            await this.checkMemoryUsage();
         }, STATUS_UPDATE_INTERVAL)
+
+        this.setStatus(ManagerStatus.READY);
     }
 
-    async cleanup(removeListeners = true) {
-        this.cleaningUp = true;
+    async cleanup(restarting = false) {
+        this.setStatus(restarting ? ManagerStatus.RESTARTING : ManagerStatus.STOPPING);
 
-        if (removeListeners)
+        // Wait 5 seconds for the interval to stop
+        await delay(DELAY_BEFORE_CLEANUP);
+
+        if (!restarting)
             this.removeAllListeners();
 
         this.console.close();
@@ -99,7 +115,7 @@ class AternosManager extends EventEmitter {
         this.browser = null;
     }
 
-    async isLoggedin() {
+    async isLoggedIn() {
         if (!this.browser || !this.console)
             return false;
 
@@ -108,7 +124,7 @@ class AternosManager extends EventEmitter {
     }
 
     async login(user, pass) {
-        if (await this.isLoggedin())
+        if (await this.isLoggedIn())
             return;
 
         console.log('Konsole: Logging into Aternos console...');
@@ -154,8 +170,20 @@ class AternosManager extends EventEmitter {
         return this.maintainance;
     }
 
+    setStatus(status) {
+        this.prevInternalStatus = this.internalStatus;
+        this.internalStatus = status;
+
+        if (this.internalStatus != null)
+            this.emit('internalStatusUpdate', this.internalStatus, this.prevInternalStatus);
+    }
+
+    getStatus() {
+        return this.internalStatus;
+    }
+
     async checkStatus(forceUpdate) {
-        if (!this.console || this.console.actionInProgress)
+        if (this.getStatus() != ManagerStatus.READY)
             return;
 
         const results = await this.console.evaluate(() => {
@@ -190,8 +218,20 @@ class AternosManager extends EventEmitter {
         return results;
     }
 
+    async checkMemoryUsage() {
+        const usageStats = await pidusage(this.browser.process().pid);
+        if (usageStats.memory > MAX_MEMORY_ALLOWED) {
+            await this.cleanup(true);
+            await this.initialize();
+        }
+    }
+
     hasCrashed() {
         return this.currentStatus.serverStatus == AternosStatus.CRASHED;
+    }
+
+    isReady() {
+        return this.getStatus() == ManagerStatus.READY;
     }
 
     async getServerIP() {
@@ -232,9 +272,17 @@ class AternosManager extends EventEmitter {
         console.log(`Konsole: Successfully changed server IP to ${this.url}!`);
     }
 
-    async startServer() {
-        await this.console.click('#start');
+    async attemptStartServer(currInternalStatus) {
+        // This is for the edge case when the user is requesting to start the server when the bot isn't ready
+        if (this.isReady()) {
+            await this.console.click('#start');
+            this.off('internalStatusUpdate', attemptStartServer);
+        }
+    }
+
+    requestStartServer() {
+        this.on('internalStatusUpdate', attemptStartServer);
     }
 }
 
-module.exports = { AternosManager, AternosStatus, AternosException };
+module.exports = { AternosManager, AternosStatus, AternosException, ManagerStatus };
