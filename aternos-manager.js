@@ -103,7 +103,7 @@ class AternosManager extends EventEmitter {
         if (!this.browser || !this.console)
             return false;
 
-        const currentUrl = await this.console.url();
+        const currentUrl = this.console.url();
         return currentUrl == ATERNOS_CONSOLE_URL;
     }
 
@@ -126,18 +126,21 @@ class AternosManager extends EventEmitter {
         await this.console.type('#user', user);
         await this.console.type('#password', pass);
 
-        // Wait for 5 seconds if there's an error
-        await this.console.click('#login');
-        await delay(LOGIN_DELAY);
+        // Wait for 3 seconds if there's an error
+        try {
+            await Promise.all([
+                await this.console.click('#login'),
+                await this.console.waitForNavigation({ timeout: LOGIN_DELAY })
+            ]);
 
-        const currentUrl = this.console.url();
-        if (currentUrl == ATERNOS_LOGIN_URL) {
+            // Login succeeded at this point
+            console.log('Konsole: Successfully logged in!');
+        } catch (err) {
+            // Login failed
             let errorMsg = await this.console.$eval('.login-error', elem => elem.textContent.trim(), { timeout: 5000 });
             if (!errorMsg)
                 errorMsg = 'An unknown error occurred when attempting to login to the console';
-            throw new AternosException(errorMsg)
-        } else {
-            console.log('Konsole: Successfully logged in!');
+            throw new AternosException(errorMsg);
         }
     }
 
