@@ -3,16 +3,19 @@ const EventEmitter = require('events').EventEmitter;
 
 const interval = require('interval-promise');
 const deepEqual = require('deep-equal');
-const Nick = require('nickjs');
+const puppeteer = require('puppeteer');
+const pidusage = require('pidusage');
+const delay = require('delay');
 
-const JQUERY_VERSION = '3.5.1';
-const ATERNOS_HOME_URL = 'https://aternos.org/:en/';
-const ATERNOS_LOGIN_URL = 'https://aternos.org/go/';
-const ATERNOS_CONSOLE_URL = 'https://aternos.org/server/';
+const ATERNOS_HOME_URL          = 'https://aternos.org/:en/';
+const ATERNOS_LOGIN_URL         = 'https://aternos.org/go/';
+const ATERNOS_SERVER_SELECT_URL = 'https://aternos.org/servers/';
+const ATERNOS_CONSOLE_URL       = 'https://aternos.org/server/';
 
-const MIN_RELOGIN_TIMEOUT = 10 * 60 * 1000;   // 10 minutes
-const WAIT_TIME_BETWEEN_PAGES = 3 * 1000;     // 3 seconds
-const STATUS_UPDATE_INTERVAL = 3 * 1000;      // 3 seconds
+const LOGIN_DELAY = 5 * 1000;                      // 5 seconds
+const STATUS_UPDATE_INTERVAL = 3 * 1000;           // 3 seconds
+const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
+// const MAX_MEMORY_ALLOWED = 150 * 1024 * 1024; // 150 MB
 
 const MAINTAINANCE_LOCK_FILE = 'maintainance.lock';
 
@@ -57,30 +60,12 @@ class AternosManager extends EventEmitter {
 
         this.maintainance = false;
         this.cleaningUp = false;
-
-        this.nick = new Nick({
-            printNavigation: !false,
-            printResourceErrors: !false,
-            printPageErrors: !false,
-            printAborts: !false
-        });
-    }
-
-
-    async makeNewTab(url, waitForTag = false, injectJquery = false) {
-        const tab = await this.nick.newTab();
-        await tab.open(url);
-
-        if (!!waitForTag)
-            await tab.untilVisible(waitForTag);
-
-        if (!!injectJquery)
-            await tab.inject(`http://code.jquery.com/jquery-${JQUERY_VERSION}.min.js`);
-
-        return tab;
     }
 
     async initialize() {
+        if (!this.browser)
+            this.browser = await puppeteer.launch({ headless: !false });
+
         await this.login(this.user, this.pass);
         await this.selectServerFromList();
 
@@ -101,17 +86,24 @@ class AternosManager extends EventEmitter {
         }, STATUS_UPDATE_INTERVAL)
     }
 
-    async cleanup() {
+    async cleanup(removeListeners = true) {
         this.cleaningUp = true;
-        this.removeAllListeners();
-        this.nick.exit();
+
+        if (removeListeners)
+            this.removeAllListeners();
+
+        this.console.close();
+        this.console = null;
+
+        this.browser.close();
+        this.browser = null;
     }
 
     async isLoggedin() {
-        if (!this.console)
+        if (!this.browser || !this.console)
             return false;
 
-        const currentUrl = await this.console.getUrl();
+        const currentUrl = await this.console.url();
         return currentUrl == ATERNOS_CONSOLE_URL;
     }
 
@@ -121,27 +113,32 @@ class AternosManager extends EventEmitter {
 
         console.log('Konsole: Logging into Aternos console...');
 
-        this.console = await this.makeNewTab(ATERNOS_HOME_URL, '.splash', true);
-        await this.console.click('.mod-signup');
-        await this.console.wait(WAIT_TIME_BETWEEN_PAGES);
+        this.console = await this.browser.newPage();
+        await this.console.goto(ATERNOS_HOME_URL);
+        await this.console.waitForSelector('.splash');
+
+        await Promise.all([
+            this.console.click('.mod-signup'),
+            this.console.waitForNavigation()
+        ]);
 
         // Type in the credentials and try to login
-        await this.console.sendKeys('#user', user);
-        await this.console.sendKeys('#password', pass);
+        await this.console.type('#user', user);
+        await this.console.type('#password', pass);
+
+        // Wait for 5 seconds if there's an error
         await this.console.click('#login');
+        await delay(LOGIN_DELAY);
 
-        // Wait up to 3 seconds if an error occurs
-        await this.console.wait(WAIT_TIME_BETWEEN_PAGES);
-
-        const errorMsg = await this.console.evaluate((arg, callback) => {
-            const errMsg = $('.login-error').text().trim();
-            callback(null, errMsg);
-        });
-
-        if (!!errorMsg)
-            throw new AternosException(errorMsg);
-
-        console.log('Konsole: Successfully logged in!');
+        const currentUrl = this.console.url();
+        if (currentUrl == ATERNOS_LOGIN_URL) {
+            let errorMsg = await this.console.$eval('.login-error', elem => elem.textContent.trim(), { timeout: 5000 });
+            if (!errorMsg)
+                errorMsg = 'An unknown error occurred when attempting to login to the console';
+            throw new AternosException(errorMsg)
+        } else {
+            console.log('Konsole: Successfully logged in!');
+        }
     }
 
     async toggleMaintainance(newVal) {
@@ -158,18 +155,19 @@ class AternosManager extends EventEmitter {
         if (!this.console || this.console.actionInProgress)
             return;
 
-        const results = await this.console.evaluate((arg, callback) => {
-            const status = $('.statuslabel-label').text().toLowerCase().trim();
-            const playerCount = $('#players').text().trim();
-            const qTime = $('.queue-time').text().toLowerCase().trim().substring(4);
-            const qPosition = $('.queue-position').text().toLowerCase().trim();
+        const results = await this.console.evaluate(() => {
+            const $cleanedText = selector => document.querySelector(selector).textContent.trim();
+            const status      = $cleanedText('.statuslabel-label').toLowerCase();
+            const playerCount = $cleanedText('#players');
+            const qTime       = $cleanedText('.queue-time').toLowerCase().substring(4);
+            const qPosition   = $cleanedText('.queue-position').toLowerCase();
 
-            callback(null, {
+            return {
                 serverStatus: status,
                 playersOnline: playerCount,
                 queueEta: qTime,
                 queuePos: qPosition
-            });
+            };
         });
 
         this.lastStatus = this.currentStatus;
@@ -194,47 +192,40 @@ class AternosManager extends EventEmitter {
     }
 
     async getServerIP() {
-        return await this.console.evaluate((arg, callback) => {
-            const serverIP = $('.server-ip')[0].firstChild.textContent.trim()
-            callback(null, serverIP);
-        });
+        return await this.console.$eval('.server-ip', e => e.innerText.trim().split(/\s/g)[0]);
     }
 
     async clickConfirmNowIfNeeded() {
-        await this.console.evaluate((arg, callback) => {
-            const needToConfirm = $('#confirm').is(':visible');
-            if (needToConfirm)
-                $('#confirm').click();
-            callback(null, null);
-        });
+        // Source: https://stackoverflow.com/a/14122186
+        const needToConfirm = await this.console.$eval('#confirm', e => e.offsetWidth === 0 && e.offsetHeight === 0);
+        if (needToConfirm)
+            await this.console.click('#confirm');
     }
-
+ 
     async selectServerFromList() {
-        await this.console.waitUntilVisible('.page-servers');
+        if (this.console.url() != ATERNOS_SERVER_SELECT_URL)
+            throw new AternosException('You must be on server select URL in order to select the right server');
 
-        // Selecte the correct server from the list
-        const errorMsg = await this.console.evaluate((arg, callback) => {
-            const targetName = arg.targetUrl.split('.').shift();
-            const serverIndex = $('.server-name', '.servers').map(function() {
-                return targetName == this.textContent.trim();
-            }).toArray().indexOf(true);
+        console.log('Selecting correct server from list...');
 
-            if (serverIndex < 0) {
-                callback(null, 'Unable to locate server on Aternos console! Does this bot have access to the correct server on Aternos?');
-            } else {
-                // Access that server
-                $('.server')[serverIndex].click();
-                callback(null, null);
-            }
-        }, { 'targetUrl': this.url });
+        await this.console.waitForSelector('.page-servers');
 
-        if (!!errorMsg)
-            throw new AternosException(errorMsg);
+        // Select the correct server from the list
+        const serverIndex = await this.console.$$eval('.server-name', (elems, targetUrl) => {
+            return elems.map(e => e.textContent.trim() == targetUrl.split('.').shift()).indexOf(true);
+        }, this.url);
 
-        // Wait for the page to load
-        await this.console.wait(WAIT_TIME_BETWEEN_PAGES);
-        await this.console.untilVisible('.server-status');
+        if (serverIndex == -1)
+            throw new AternosException('Unable to locate target server on Aternos console!');
 
+        // Access that server
+        const targetServerPanel = await this.console.$(`.server:nth-child(${serverIndex + 1})`);
+        await Promise.all([
+            targetServerPanel.click(),
+            this.console.waitForNavigation()
+        ]);
+
+        // Wait for page to load
         console.log(`Konsole: Successfully changed server IP to ${this.url}!`);
     }
 
