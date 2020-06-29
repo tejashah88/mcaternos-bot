@@ -104,4 +104,7 @@ dist
 .tern-port
 
 # Config files
-.ini
+*.ini
+
+# Maintainance lock file
+maintainance.lock

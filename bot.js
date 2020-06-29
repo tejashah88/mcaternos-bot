@@ -11,16 +11,17 @@ const fs = require('fs');
 const ini = require('ini');
 const config = ini.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
 
-const diehard = require('diehard');
-
 const Discord = require('discord.js');
 const bot = new Discord.Client();
 
 const { AternosManager, AternosStatus, AternosException } = require('./aternos-manager');
 
 // Totally not a KDE reference :P
-const Konsole = new AternosManager(config.aternos.SERVER_URL)
-Konsole.setLoginDetails(config.aternos.ATERNOS_USER, config.aternos.ATERNOS_PASS);
+const Konsole = new AternosManager({
+    server: config.aternos.SERVER_URL,
+    username: config.aternos.ATERNOS_USER,
+    password: config.aternos.ATERNOS_PASS
+})
 
 async function onMaintainanceStatusUpdate(isMaintainanceEnabled) {
     if (isMaintainanceEnabled) {
@@ -136,12 +137,17 @@ bot.once('ready', () => {
     console.info(`Logged in as ${bot.user.tag}!`);
 });
 
+function botCleanup() {
+    Promise.all([
+        bot.user.setPresence({ status: 'invisible' }),
+        Konsole.cleanup()
+    ]).then(() => process.exit(0));
+}
+
 // Add listener for when bot is shutting down
-diehard.register(async done => {
-    await bot.user.setPresence({ status: 'invisible' });
-    await Konsole.cleanup();
-    done();
-});
+process.on('SIGINT', botCleanup);
+process.on('SIGTERM', botCleanup);
+process.on('SIGQUIT', botCleanup);
 
 // Add listener for bot to respond to messages
 bot.on('message', async msg => {
@@ -208,9 +214,6 @@ bot.on('message', async msg => {
 
         // Initialize the Aternos console access
         await Konsole.initialize();
-
-        // Listen for Ctrl+C or uncaught exceptions to clean up bot
-        diehard.listen();
     } catch (err) {
         if (err instanceof AternosException) {
             console.error(`ERROR: ${err}`);

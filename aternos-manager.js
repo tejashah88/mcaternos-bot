@@ -44,12 +44,13 @@ class AternosException extends Error {
 }
 
 class AternosManager extends EventEmitter {
-    constructor(url) {
+    constructor(options) {
         super();
-        this.url = url;
+
         this.console = null;
-        this.user = null;
-        this.pass = null;
+        this.url = options.server;
+        this.user = options.username;
+        this.pass = options.password;
 
         this.currentStatus = null;
         this.lastStatus = null;
@@ -65,10 +66,6 @@ class AternosManager extends EventEmitter {
         });
     }
 
-    setLoginDetails(user, pass) {
-        this.user = user;
-        this.pass = pass;
-    }
 
     async makeNewTab(url, waitForTag = false, injectJquery = false) {
         const tab = await this.nick.newTab();
