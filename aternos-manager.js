@@ -286,7 +286,7 @@ class AternosManager {
 
     async clickConfirmNowIfNeeded() {
         // Source: https://stackoverflow.com/a/14122186
-        const needToConfirm = await this.console.$eval('#confirm', e => e.offsetWidth === 0 && e.offsetHeight === 0);
+        const needToConfirm = await this.console.$eval('#confirm', e => e.offsetWidth !== 0 && e.offsetHeight !== 0);
         if (needToConfirm)
             await this.console.click('#confirm');
     }
