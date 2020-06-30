@@ -225,7 +225,7 @@ class AternosManager {
             // NOTE: Error is ignored because the tab has teleported to a new URL and it can't find the 'login-error' element
         }
 
-        if (errorMsg == null)
+        if (!errorMsg)
             console.log('Konsole: Successfully logged in!');
         else
             throw new AternosException(errorMsg);
