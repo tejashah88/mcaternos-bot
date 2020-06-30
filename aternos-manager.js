@@ -1,11 +1,12 @@
 const fs = require('fs');
 const EventEmitter = require('events').EventEmitter;
 
-const interval = require('interval-promise');
+const { setIntervalAsync } = require('set-interval-async/fixed');
+const { clearIntervalAsync } = require('set-interval-async');
+
 const deepEqual = require('deep-equal');
 const puppeteer = require('puppeteer');
 const pidusage = require('pidusage');
-const delay = require('delay');
 
 const ATERNOS_HOME_URL          = 'https://aternos.org/:en/';
 const ATERNOS_LOGIN_URL         = 'https://aternos.org/go/';
@@ -14,7 +15,6 @@ const ATERNOS_CONSOLE_URL       = 'https://aternos.org/server/';
 
 const LOGIN_DELAY = 5 * 1000;                      // 5 seconds
 const STATUS_UPDATE_INTERVAL = 3 * 1000;           // 3 seconds
-const DELAY_BEFORE_CLEANUP = 10 * 1000;            // 10 seconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
 
 const MAINTAINANCE_LOCK_FILE = 'maintainance.lock';
@@ -111,6 +111,8 @@ class StatusTracker extends EventEmitter {
 class AternosManager {
     constructor(options) {
         this.console = null;
+        this.statusLoop = null;
+
         this.url = options.server;
         this.user = options.username;
         this.pass = options.password;
@@ -146,12 +148,7 @@ class AternosManager {
         await this.checkStatus(true);
 
         console.log('Konsole: Starting status and memory scanning loop...');
-        interval(async (iter, stop) => {
-            if ([ManagerStatus.STOPPING, ManagerStatus.RESTARTING].includes(this.managerStatus.get())) {
-                console.log('Konsole: Stopped status and memory scanning loop!');
-                return stop();
-            }
-
+        this.statusLoop = setIntervalAsync(async () => {
             await this.checkStatus();
             await this.checkMemoryUsage();
         }, STATUS_UPDATE_INTERVAL);
@@ -168,8 +165,8 @@ class AternosManager {
             this.managerStatus.set(ManagerStatus.STOPPING);
         }
 
-        // Wait 5 seconds for the interval to stop
-        await delay(DELAY_BEFORE_CLEANUP);
+        await clearIntervalAsync(this.statusLoop);
+        console.log('Konsole: Stopped status and memory scanning loop!');
 
         if (!restarting)
             this.removeAllListeners();
