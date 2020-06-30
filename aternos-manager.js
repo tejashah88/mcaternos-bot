@@ -7,6 +7,7 @@ const { clearIntervalAsync } = require('set-interval-async');
 const deepEqual = require('deep-equal');
 const puppeteer = require('puppeteer');
 const pidusage = require('pidusage');
+const delay = require('delay');
 
 const ATERNOS_HOME_URL          = 'https://aternos.org/:en/';
 const ATERNOS_LOGIN_URL         = 'https://aternos.org/go/';
@@ -217,6 +218,7 @@ class AternosManager {
 
         await this.console.click('#login');
         await this.console.waitForResponse(res => res.url().includes('login.php'));
+        await delay(1000);
 
         let errorMsg = null;
         try {
