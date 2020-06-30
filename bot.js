@@ -79,21 +79,21 @@ const BOT_CMDS = {
 
             if (Konsole.hasCrashed() && !isAdminUser) {
                 await msg.channel.send('The server has crashed! Please wait while a server admin resolves the issue.')
-            } else if ([AternosStatus.OFFLINE, AternosStatus.CRASHED].includes(Konsole.currentStatus.serverStatus)) {
+            } else if ([AternosStatus.OFFLINE, AternosStatus.CRASHED].includes(Konsole.serverStatus.get())) {
                 await msg.channel.send('Starting the server...');
 
                 async function onDetectOnline(newStatus) {
                     if (newStatus == AternosStatus.ONLINE) {
                         await msg.channel.send('Server is online!');
-                        Konsole.off('statusUpdate', onDetectOnline);
+                        Konsole.serverStatus.removeHook(onDetectOnline);
                     }
                 }
 
-                Konsole.on('statusUpdate', onDetectOnline);
+                Konsole.serverStatus.addHook(onDetectOnline);
 
                 await Konsole.requestStartServer();
             } else {
-                await msg.channel.send(`Server is not offline! It is ${Konsole.currentStatus.serverStatus}`);
+                await msg.channel.send(`Server is not offline! It is ${Konsole.serverStatus.get()}`);
             }
         }
     },
@@ -134,10 +134,10 @@ async function updateBotStatus(newFullStatus) {
     } else if (serverStatus == AternosStatus.OFFLINE) {
         discordStatus = 'Offline';
         outputMsg = 'The server is offline!';
-    } else if ([AternosStatus.STARTING, AternosStatus.LOADING].includes(serverStatus)) {
+    } else if ([AternosStatus.STARTING, AternosStatus.PREPARING, AternosStatus.LOADING].includes(serverStatus)) {
         discordStatus = 'Starting up...';
         outputMsg = 'The server is starting up...';
-    } else if ([AternosStatus.IN_QUEUE, AternosStatus.PREPARING].includes(serverStatus)) {
+    } else if ([AternosStatus.IN_QUEUE].includes(serverStatus)) {
         discordStatus = `In queue: ${queuePos}`;
         outputMsg = `The server is in queue. ETA is ${queueEta} and we're in position ${queuePos}`;
         if (serverStatus == AternosStatus.IN_QUEUE)
@@ -233,13 +233,13 @@ bot.on('message', async msg => {
         await bot.login(config.discord.CHAT_TOKEN);
 
         // Attach listener for full server status
-        Konsole.on('fullStatusUpdate', updateBotStatus);
+        Konsole.fullServerStatus.addHook(updateBotStatus);
 
         // Attach listener for maintainance status update
-        Konsole.on('maintainanceUpdate', onMaintainanceStatusUpdate)
+        Konsole.maintainanceStatus.addHook(onMaintainanceStatusUpdate)
 
         // Attach listener for manager status update
-        Konsole.on('internalStatusUpdate', onConsoleStatusUpdate);
+        Konsole.managerStatus.addHook(onConsoleStatusUpdate);
 
         // Initialize the Aternos console access
         await Konsole.initialize();

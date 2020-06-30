@@ -28,8 +28,7 @@ const AternosStatus = {
     IN_QUEUE:  'waiting in queue',
     SAVING:    'saving ...',
     STOPPING:  'stopping ...',
-    CRASHED:   'crashed',
-    UNKNOWN:   null,
+    CRASHED:   'crashed'
 }
 
 const ManagerStatus = {
@@ -38,6 +37,10 @@ const ManagerStatus = {
     RESTARTING:   4,
     STOPPING:     8,
 }
+
+// Source: https://stackoverflow.com/a/16608045
+isArray = (x) => (!!x) && (x.constructor === Array);
+isObject = (x) => (!!x) && (x.constructor === Object)
 
 // Source: https://gist.github.com/slavafomin/b164e3e710a6fc9352c934b9073e7216
 class AternosException extends Error {
@@ -53,23 +56,78 @@ class AternosException extends Error {
     }
 }
 
-class AternosManager extends EventEmitter {
-    constructor(options) {
+class StatusTracker extends EventEmitter {
+    constructor(eventName, { initial = null, deep = false, allowed = true } = {}) {
         super();
 
+        this.eventName = eventName;
+        this.deepStatus = deep;
+        this.allowedValues = allowed;
+
+        this.currentStatus = initial;
+        this.prevStatus = null;
+    }
+
+    set(newStatus, forceUpdate = false) {
+        const arrayCheckFail = isArray(this.allowedValues) && !this.allowedValues.includes(newStatus);
+        const objectCheckFail = isObject(this.allowedValues) && !Object.values(this.allowedValues).includes(newStatus);
+        
+        if (arrayCheckFail || objectCheckFail)
+            throw new Error(`Status tracker of event '${this.eventName}' received invalid status '${newStatus}'`);
+
+        this.prevStatus = this.currentStatus;
+        this.currentStatus = newStatus;
+
+        if (!this.deepStatus) {
+            if (forceUpdate || this.currentStatus != this.prevStatus)
+                this.emit(this.eventName, this.currentStatus, this.prevStatus, forceUpdate);
+        } else {
+            if (forceUpdate || !deepEqual(this.currentStatus, this.prevStatus))
+                this.emit(this.eventName, this.currentStatus, this.prevStatus, forceUpdate);
+        }
+    }
+
+    get() {
+        return this.currentStatus;
+    }
+
+    forceUpdate() {
+        this.set(this.currentStatus, true);
+    }
+
+    addHook(fn) {
+        this.on(this.eventName, fn);
+    }
+
+    removeHook(fn) {
+        this.off(this.eventName, fn);
+    }
+
+    removeAllHooks() {
+        this.off(this.eventName);
+    }
+}
+
+class AternosManager {
+    constructor(options) {
         this.console = null;
         this.url = options.server;
         this.user = options.username;
         this.pass = options.password;
 
-        this.currentStatus = null;
-        this.lastStatus = null;
+        this.serverStatus = new StatusTracker('serverStatus', { allowed: AternosStatus });
+        this.fullServerStatus = new StatusTracker('fullServerStatus', { deep: true });
+        this.maintainanceStatus = new StatusTracker('maintainanceStatus', { allowed: [true, false] });
+        this.managerStatus = new StatusTracker('managerStatus', {
+            initial: ManagerStatus.INITIALIZING,
+            allowed: ManagerStatus
+        });
 
-        this.maintainance = false;
-        this.internalStatus = null;
-        this.prevInternalStatus = null;
+        this.maintainanceStatus.addHook(async (onMaintainance) => {
+            await fs.promises.writeFile(MAINTAINANCE_LOCK_FILE, onMaintainance);
+        })
 
-        this.setStatus(ManagerStatus.INITIALIZING);
+        this.managerStatus.set(ManagerStatus.INITIALIZING);
     }
 
     async initialize() {
@@ -81,26 +139,26 @@ class AternosManager extends EventEmitter {
 
         if (fs.existsSync(MAINTAINANCE_LOCK_FILE)) {
             const contents = await fs.promises.readFile(MAINTAINANCE_LOCK_FILE, 'utf-8');
-            await this.toggleMaintainance(contents == 'true');
-            console.log(`Konsole: Starting in ${this.isInMaintainance() ? 'maintainance' : 'production'} mode!`);
+            this.toggleMaintainance(contents == 'true');
+            console.log(`Konsole: Starting in ${this.maintainanceStatus.get() ? 'maintainance' : 'production'} mode!`);
         }
 
         // Call this once to ensure that we have a status reading of the server
         await this.checkStatus(true);
 
         interval(async (iter, stop) => {
-            if ([ManagerStatus.STOPPING, ManagerStatus.RESTARTING].includes(this.getStatus()))
+            if ([ManagerStatus.STOPPING, ManagerStatus.RESTARTING].includes(this.managerStatus.get()))
                 return stop();
 
             await this.checkStatus();
             await this.checkMemoryUsage();
         }, STATUS_UPDATE_INTERVAL)
 
-        this.setStatus(ManagerStatus.READY);
+        this.managerStatus.set(ManagerStatus.READY);
     }
 
     async cleanup(restarting = false) {
-        this.setStatus(restarting ? ManagerStatus.RESTARTING : ManagerStatus.STOPPING);
+        this.managerStatus.set(restarting ? ManagerStatus.RESTARTING : ManagerStatus.STOPPING);
 
         // Wait 5 seconds for the interval to stop
         await delay(DELAY_BEFORE_CLEANUP);
@@ -160,30 +218,24 @@ class AternosManager extends EventEmitter {
         }
     }
 
-    async toggleMaintainance(newVal) {
-        this.maintainance = newVal;
-        await fs.promises.writeFile(MAINTAINANCE_LOCK_FILE, this.maintainance);
-        this.emit('maintainanceUpdate', this.maintainance);
+    toggleMaintainance(newVal) {
+        this.maintainanceStatus.set(newVal);
     }
 
     isInMaintainance() {
-        return this.maintainance;
+        return this.maintainanceStatus.get();
     }
 
-    setStatus(status) {
-        this.prevInternalStatus = this.internalStatus;
-        this.internalStatus = status;
-
-        if (this.internalStatus != null)
-            this.emit('internalStatusUpdate', this.internalStatus, this.prevInternalStatus);
+    hasCrashed() {
+        return this.serverStatus.get() == AternosStatus.CRASHED;
     }
 
-    getStatus() {
-        return this.internalStatus;
+    isReady() {
+        return this.managerStatus.get() == ManagerStatus.READY;
     }
 
     async checkStatus(forceUpdate) {
-        if (this.getStatus() != ManagerStatus.READY)
+        if (this.managerStatus.get() != ManagerStatus.READY)
             return;
 
         const results = await this.console.evaluate(() => {
@@ -201,19 +253,8 @@ class AternosManager extends EventEmitter {
             };
         });
 
-        this.lastStatus = this.currentStatus;
-        this.currentStatus = results;
-
-        if (this.currentStatus != null) {
-            const currServerStatus = this.currentStatus.serverStatus;
-            const lastServerStatus = (this.lastStatus == null) ? null : this.lastStatus.serverStatus;
-
-            if (forceUpdate || (currServerStatus != lastServerStatus))
-                this.emit('statusUpdate', currServerStatus, lastServerStatus);
-            
-            if (forceUpdate || !deepEqual(this.currentStatus, this.lastStatus))
-                this.emit('fullStatusUpdate', this.currentStatus, this.lastStatus);
-        }
+        this.serverStatus.set(results.serverStatus);
+        this.fullServerStatus.set(results);
 
         return results;
     }
@@ -224,14 +265,6 @@ class AternosManager extends EventEmitter {
             await this.cleanup(true);
             await this.initialize();
         }
-    }
-
-    hasCrashed() {
-        return this.currentStatus.serverStatus == AternosStatus.CRASHED;
-    }
-
-    isReady() {
-        return this.getStatus() == ManagerStatus.READY;
     }
 
     async getServerIP() {
@@ -249,7 +282,7 @@ class AternosManager extends EventEmitter {
         if (this.console.url() != ATERNOS_SERVER_SELECT_URL)
             throw new AternosException('You must be on server select URL in order to select the right server');
 
-        console.log('Selecting correct server from list...');
+        console.log('Konsole: Selecting correct server from list...');
 
         await this.console.waitForSelector('.page-servers');
 
@@ -272,16 +305,19 @@ class AternosManager extends EventEmitter {
         console.log(`Konsole: Successfully changed server IP to ${this.url}!`);
     }
 
-    async attemptStartServer(currInternalStatus) {
-        // This is for the edge case when the user is requesting to start the server when the bot isn't ready
-        if (this.isReady()) {
-            await this.console.click('#start');
-            this.off('internalStatusUpdate', attemptStartServer);
-        }
-    }
-
     requestStartServer() {
-        this.on('internalStatusUpdate', attemptStartServer);
+        let that = this;
+
+        async function attemptStartServer(currInternalStatus) {
+            // This is for the edge case when the user is requesting to start the server when the bot isn't ready
+            if (that.isReady()) {
+                await that.console.click('#start');
+                that.managerStatus.removeHook(attemptStartServer);
+            }
+        }
+
+        this.managerStatus.addHook(attemptStartServer);
+        this.managerStatus.forceUpdate();
     }
 }
 
