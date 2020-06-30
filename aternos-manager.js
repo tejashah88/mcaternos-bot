@@ -13,7 +13,6 @@ const ATERNOS_LOGIN_URL         = 'https://aternos.org/go/';
 const ATERNOS_SERVER_SELECT_URL = 'https://aternos.org/servers/';
 const ATERNOS_CONSOLE_URL       = 'https://aternos.org/server/';
 
-const LOGIN_DELAY = 5 * 1000;                      // 5 seconds
 const STATUS_UPDATE_INTERVAL = 500;                // 500 milliseconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
 
@@ -218,22 +217,20 @@ class AternosManager {
         await this.console.type('#user', user);
         await this.console.type('#password', pass);
 
-        // Wait for 3 seconds if there's an error
-        try {
-            await Promise.all([
-                await this.console.click('#login'),
-                await this.console.waitForNavigation({ timeout: LOGIN_DELAY })
-            ]);
+        await this.console.click('#login');
+        await this.console.waitForResponse(res => res.url().includes('login.php'));
 
-            // Login succeeded at this point
-            console.log('Konsole: Successfully logged in!');
+        let errorMsg = null;
+        try {
+            errorMsg = await this.console.$eval('.login-error', elem => elem.textContent.trim());
         } catch (err) {
-            // Login failed
-            let errorMsg = await this.console.$eval('.login-error', elem => elem.textContent.trim(), { timeout: 5000 });
-            if (!errorMsg)
-                errorMsg = 'An unknown error occurred when attempting to login to the console';
-            throw new AternosException(errorMsg);
+            // NOTE: Error is ignored because the tab has teleported to a new URL and it can't find the 'login-error' element
         }
+
+        if (errorMsg == null)
+            console.log('Konsole: Successfully logged in!');
+        else
+            throw new AternosException(errorMsg);
     }
 
     toggleMaintainance(newVal) {
