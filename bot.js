@@ -176,11 +176,14 @@ async function botCleanup() {
 }
 
 nodeCleanup(function (exitCode, signal) {
-    if (signal) {
-        botCleanup().then(() => process.kill(process.pid, signal));
-        nodeCleanup.uninstall();
-        return false;
-    }
+    botCleanup().then(() => {
+        if (!signal)
+            signal = 'SIGINT';
+        process.kill(process.pid, signal);
+    });
+    
+    nodeCleanup.uninstall();
+    return false;
 });
 
 // Add listener for bot to respond to messages
@@ -246,7 +249,8 @@ bot.on('message', async msg => {
     } catch (err) {
         if (err instanceof AternosException) {
             console.error(`ERROR: ${err}`);
-            // process.exit(-1);
+            // We send a SIGINT to ourselves to make sure the bot cleans itself up
+            process.kill(process.pid, 'SIGINT');
         }
     }
 })();

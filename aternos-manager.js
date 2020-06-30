@@ -119,9 +119,7 @@ class AternosManager {
         this.serverStatus = new StatusTracker('serverStatus', { allowed: AternosStatus });
         this.fullServerStatus = new StatusTracker('fullServerStatus', { deep: true });
         this.maintainanceStatus = new StatusTracker('maintainanceStatus', { allowed: [true, false] });
-        this.managerStatus = new StatusTracker('managerStatus', {
-            allowed: ManagerStatus
-        });
+        this.managerStatus = new StatusTracker('managerStatus', { allowed: ManagerStatus });
 
         this.maintainanceStatus.addHook(async (onMaintainance) => {
             await fs.promises.writeFile(MAINTAINANCE_LOCK_FILE, onMaintainance);
