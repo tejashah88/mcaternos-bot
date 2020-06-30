@@ -165,17 +165,23 @@ class AternosManager {
             this.managerStatus.set(ManagerStatus.STOPPING);
         }
 
-        await clearIntervalAsync(this.statusLoop);
-        console.log('Konsole: Stopped status and memory scanning loop!');
+        if (this.statusLoop != null) {
+            await clearIntervalAsync(this.statusLoop);
+            console.log('Konsole: Stopped status and memory scanning loop!');
+        }
 
         if (!restarting)
             this.removeAllListeners();
 
-        this.console.close();
-        this.console = null;
+        if (this.console != null) {
+            this.console.close();
+            this.console = null;
+        }
 
-        this.browser.close();
-        this.browser = null;
+        if (this.browser != null) {
+            this.browser.close();
+            this.browser = null;
+        }
     }
 
     removeAllListeners() {

@@ -139,11 +139,10 @@ async function updateBotStatus(newFullStatus) {
     } else if ([AternosStatus.STARTING, AternosStatus.PREPARING, AternosStatus.LOADING].includes(serverStatus)) {
         discordStatus = 'Starting up...';
         outputMsg = 'The server is starting up...';
-    } else if ([AternosStatus.IN_QUEUE].includes(serverStatus)) {
+    } else if (serverStatus == AternosStatus.IN_QUEUE) {
         discordStatus = `In queue: ${queuePos}`;
         outputMsg = `The server is in queue. ETA is ${queueEta} and we're in position ${queuePos}`;
-        if (serverStatus == AternosStatus.IN_QUEUE)
-            await Konsole.clickConfirmNowIfNeeded();
+        await Konsole.clickConfirmNowIfNeeded();
     } else if ([AternosStatus.SAVING, AternosStatus.STOPPING].includes(serverStatus)) {
         discordStatus = 'Shutting down...';
         outputMsg = 'The server is shutting down...';
