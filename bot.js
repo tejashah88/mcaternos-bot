@@ -14,6 +14,8 @@ const config = ini.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
 const Discord = require('discord.js');
 const bot = new Discord.Client();
 
+const nodeCleanup = require('node-cleanup');
+
 const { AternosManager, AternosStatus, AternosException, ManagerStatus } = require('./aternos-manager');
 
 // Totally not a KDE reference :P
@@ -174,14 +176,13 @@ async function botCleanup() {
     await Konsole.cleanup();
 }
 
-function processExitListener() {
-    botCleanup().then(() => process.exit(0));
-}
-
-// Add listener for when bot is shutting down
-process.on('SIGINT', processExitListener);
-process.on('SIGTERM', processExitListener);
-process.on('SIGQUIT', processExitListener);
+nodeCleanup(function (exitCode, signal) {
+    if (signal) {
+        botCleanup().then(() => process.kill(process.pid, signal));
+        nodeCleanup.uninstall();
+        return false;
+    }
+});
 
 // Add listener for bot to respond to messages
 bot.on('message', async msg => {
@@ -246,7 +247,7 @@ bot.on('message', async msg => {
     } catch (err) {
         if (err instanceof AternosException) {
             console.error(`ERROR: ${err}`);
-            process.exit(-1);
+            // process.exit(-1);
         }
     }
 })();

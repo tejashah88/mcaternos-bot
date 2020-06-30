@@ -14,7 +14,7 @@ const ATERNOS_CONSOLE_URL       = 'https://aternos.org/server/';
 
 const LOGIN_DELAY = 5 * 1000;                      // 5 seconds
 const STATUS_UPDATE_INTERVAL = 3 * 1000;           // 3 seconds
-const DELAY_BEFORE_CLEANUP = 5 * 1000;             // 5 seconds
+const DELAY_BEFORE_CLEANUP = 10 * 1000;            // 10 seconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
 
 const MAINTAINANCE_LOCK_FILE = 'maintainance.lock';
@@ -104,7 +104,7 @@ class StatusTracker extends EventEmitter {
     }
 
     removeAllHooks() {
-        this.off(this.eventName);
+        this.removeAllListeners(this.eventName);
     }
 }
 
@@ -132,7 +132,7 @@ class AternosManager {
 
     async initialize() {
         if (!this.browser)
-            this.browser = await puppeteer.launch({ headless: !false });
+            this.browser = await puppeteer.launch({ handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false });
 
         await this.login(this.user, this.pass);
         await this.selectServerFromList();
@@ -146,19 +146,28 @@ class AternosManager {
         // Call this once to ensure that we have a status reading of the server
         await this.checkStatus(true);
 
+        console.log('Konsole: Starting status and memory scanning loop...');
         interval(async (iter, stop) => {
-            if ([ManagerStatus.STOPPING, ManagerStatus.RESTARTING].includes(this.managerStatus.get()))
+            if ([ManagerStatus.STOPPING, ManagerStatus.RESTARTING].includes(this.managerStatus.get())) {
+                console.log('Konsole: Stopped status and memory scanning loop!');
                 return stop();
+            }
 
             await this.checkStatus();
             await this.checkMemoryUsage();
-        }, STATUS_UPDATE_INTERVAL)
+        }, STATUS_UPDATE_INTERVAL);
 
         this.managerStatus.set(ManagerStatus.READY);
     }
 
     async cleanup(restarting = false) {
-        this.managerStatus.set(restarting ? ManagerStatus.RESTARTING : ManagerStatus.STOPPING);
+        if (restarting) {
+            console.log('Konsole: Restarting console page...');
+            this.managerStatus.set(ManagerStatus.RESTARTING);
+        } else {
+            console.log('Konsole: Stopping console page...');
+            this.managerStatus.set(ManagerStatus.STOPPING);
+        }
 
         // Wait 5 seconds for the interval to stop
         await delay(DELAY_BEFORE_CLEANUP);
@@ -171,6 +180,13 @@ class AternosManager {
 
         this.browser.close();
         this.browser = null;
+    }
+
+    removeAllListeners() {
+        this.serverStatus.removeAllHooks();
+        this.fullServerStatus.removeAllHooks();
+        this.maintainanceStatus.removeAllHooks();
+        this.managerStatus.removeAllHooks();
     }
 
     async isLoggedIn() {
