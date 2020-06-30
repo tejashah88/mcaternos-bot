@@ -119,18 +119,17 @@ class AternosManager {
         this.fullServerStatus = new StatusTracker('fullServerStatus', { deep: true });
         this.maintainanceStatus = new StatusTracker('maintainanceStatus', { allowed: [true, false] });
         this.managerStatus = new StatusTracker('managerStatus', {
-            initial: ManagerStatus.INITIALIZING,
             allowed: ManagerStatus
         });
 
         this.maintainanceStatus.addHook(async (onMaintainance) => {
             await fs.promises.writeFile(MAINTAINANCE_LOCK_FILE, onMaintainance);
         })
-
-        this.managerStatus.set(ManagerStatus.INITIALIZING);
     }
 
     async initialize() {
+        this.managerStatus.set(ManagerStatus.INITIALIZING);
+
         if (!this.browser)
             this.browser = await puppeteer.launch({ handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false });
 
