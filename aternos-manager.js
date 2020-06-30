@@ -14,7 +14,7 @@ const ATERNOS_LOGIN_URL         = 'https://aternos.org/go/';
 const ATERNOS_SERVER_SELECT_URL = 'https://aternos.org/servers/';
 const ATERNOS_CONSOLE_URL       = 'https://aternos.org/server/';
 
-const STATUS_UPDATE_INTERVAL = 500;                // 500 milliseconds
+const STATUS_UPDATE_INTERVAL = 1000;               // 1 second
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
 
 const MAINTAINANCE_LOCK_FILE = 'maintainance.lock';
@@ -218,6 +218,8 @@ class AternosManager {
 
         await this.console.click('#login');
         await this.console.waitForResponse(res => res.url().includes('login.php'));
+
+        // Added short delay in case page doesn't teleport right away
         await delay(1000);
 
         let errorMsg = null;
@@ -328,6 +330,10 @@ class AternosManager {
             if (that.isReady()) {
                 await that.console.click('#start');
                 that.managerStatus.removeHook(attemptStartServer);
+
+                // Hide notifications alert after 1 second
+                await delay(1000);
+                await that.console.evaluate(() => hideAlert());
             }
         }
 
