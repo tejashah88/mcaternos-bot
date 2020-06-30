@@ -14,7 +14,7 @@ const ATERNOS_SERVER_SELECT_URL = 'https://aternos.org/servers/';
 const ATERNOS_CONSOLE_URL       = 'https://aternos.org/server/';
 
 const LOGIN_DELAY = 5 * 1000;                      // 5 seconds
-const STATUS_UPDATE_INTERVAL = 3 * 1000;           // 3 seconds
+const STATUS_UPDATE_INTERVAL = 500;                // 500 milliseconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
 
 const MAINTAINANCE_LOCK_FILE = 'maintainance.lock';
