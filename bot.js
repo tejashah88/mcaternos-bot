@@ -88,10 +88,21 @@ const BOT_CMDS = {
                     if (newStatus == AternosStatus.ONLINE) {
                         await msg.channel.send('Server is online!');
                         Konsole.serverStatus.removeHook(onDetectOnline);
+                        Konsole.serverStatus.removeHook(onFailToEscapeQueue);
+                    }
+                }
+
+                async function onFailToEscapeQueue(newStatus, oldStatus) {
+                    if (newStatus == AternosStatus.OFFLINE && oldStatus == AternosStatus.IN_QUEUE) {
+                        await msg.channel.send('Something went wrong when trying to escape the queue. Maybe an AD is in the way?');
+                        await Konsole.console.screenshot({ path: `fail-queue-${+new Date()}.png`});
+                        Konsole.serverStatus.removeHook(onDetectOnline);
+                        Konsole.serverStatus.removeHook(onFailToEscapeQueue);
                     }
                 }
 
                 Konsole.serverStatus.addHook(onDetectOnline);
+                Konsole.serverStatus.addHook(onFailToEscapeQueue);
 
                 await Konsole.requestStartServer();
             } else {
