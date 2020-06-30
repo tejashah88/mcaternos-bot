@@ -181,7 +181,7 @@ nodeCleanup(function (exitCode, signal) {
             signal = 'SIGINT';
         process.kill(process.pid, signal);
     });
-    
+
     nodeCleanup.uninstall();
     return false;
 });
@@ -246,6 +246,9 @@ bot.on('message', async msg => {
 
         // Initialize the Aternos console access
         await Konsole.initialize();
+
+        // Notify PM2 that we are ready
+        process.send('ready');
     } catch (err) {
         if (err instanceof AternosException) {
             console.error(`ERROR: ${err}`);

@@ -5,7 +5,7 @@
   "main": "bot.js",
   "scripts": {
     "start": "node bot.js",
-    "start-prod": "pm2 start bot.js",
+    "start-prod": "pm2 start bot.js --wait-ready",
     "stop-prod": "pm2 stop all && pm2 delete all",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
