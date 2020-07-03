@@ -251,7 +251,7 @@ class AternosManager {
         return this.managerStatus.get() == ManagerStatus.READY;
     }
 
-    async checkStatus(forceUpdate) {
+    async checkStatus(forceUpdate = false) {
         if (this.managerStatus.get() != ManagerStatus.READY)
             return;
 
@@ -270,8 +270,8 @@ class AternosManager {
             };
         });
 
-        this.serverStatus.set(results.serverStatus);
-        this.fullServerStatus.set(results);
+        this.serverStatus.set(results.serverStatus, forceUpdate);
+        this.fullServerStatus.set(results, forceUpdate);
 
         return results;
     }
