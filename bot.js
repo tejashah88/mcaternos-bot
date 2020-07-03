@@ -117,18 +117,20 @@ const BOT_CMDS = {
     },
     MaintainanceOn: {
         name: 'maintainance on',
-        description: 'Enables maintainance mode. Only the owner is able to send commands to the bot if enabled.',
+        description: 'Enables maintainance mode. Only the owner is able to send commands to the bot if maintainance is enabled.',
         adminOnly: true,
         async execute(msg) {
             await Konsole.toggleMaintainance(true);
+            await msg.channel.send('Bot will not listen to anyone except for admins!');
         }
     },
     MaintainanceOff: {
         name: 'maintainance off',
-        description: 'Disables maintainance mode. Everyone with access to the bot can send commands if enabled.',
+        description: 'Disables maintainance mode. Everyone with access to the bot can send commands if maintainance is disabled.',
         adminOnly: true,
         async execute(msg) {
             await Konsole.toggleMaintainance(false);
+            await msg.channel.send('Bot is now all ears to everyone!');
         }
     },
     GetUsageStatistics: {
