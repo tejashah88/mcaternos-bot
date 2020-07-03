@@ -259,7 +259,7 @@ class AternosManager {
             const $cleanedText = selector => document.querySelector(selector).textContent.trim();
             const status      = $cleanedText('.statuslabel-label').toLowerCase();
             const playerCount = $cleanedText('#players');
-            const qTime       = $cleanedText('.queue-time').toLowerCase().substring(4);
+            const qTime       = $cleanedText('.queue-time').toLowerCase();
             const qPosition   = $cleanedText('.queue-position').toLowerCase();
 
             return {

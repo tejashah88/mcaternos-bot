@@ -142,8 +142,14 @@ async function updateBotStatus(newFullStatus) {
     let outputMsg, discordStatus;
 
     if (serverStatus == AternosStatus.ONLINE) {
-        discordStatus = `Online ${playersOnline}`;
-        outputMsg = `The server is online with ${playersOnline} players!`;
+        const reservedSpots = parseInt(playersOnline.split('/')[0]);
+        if (reservedSpots === 0) {
+            discordStatus = `Online: ${playersOnline} - ${queueEta}`;
+            outputMsg = `The server is online with ${playersOnline} players and ${queueEta} left!`;
+        } else {
+            discordStatus = `Online: ${playersOnline}`;
+            outputMsg = `The server is online with ${playersOnline} players!`;
+        }
     } else if (serverStatus == AternosStatus.OFFLINE) {
         discordStatus = 'Offline';
         outputMsg = 'The server is offline!';
@@ -152,7 +158,7 @@ async function updateBotStatus(newFullStatus) {
         outputMsg = 'The server is starting up...';
     } else if (serverStatus == AternosStatus.IN_QUEUE) {
         discordStatus = `In queue: ${queuePos}`;
-        outputMsg = `The server is in queue. ETA is ${queueEta} and we're in position ${queuePos}`;
+        outputMsg = `The server is in queue. ETA is ${queueEta.substring(4)} and we're in position ${queuePos}`;
         await Konsole.clickConfirmNowIfNeeded();
     } else if ([AternosStatus.SAVING, AternosStatus.STOPPING].includes(serverStatus)) {
         discordStatus = 'Shutting down...';
