@@ -70,7 +70,8 @@ async function onConsoleStatusUpdate(currStatus) {
         break;
 
         case ManagerStatus.STOPPING:
-            bot.user.setPresence({ status: 'invisible' });
+            if (!Konsole.isInMaintainance())
+                bot.user.setPresence({ status: 'invisible' });
         break;
     }
 }
@@ -221,7 +222,6 @@ bot.once('ready', () => {
 });
 
 async function botCleanup() {
-    await bot.user.setPresence({ status: 'invisible' });
     await Konsole.cleanup();
 }
 
