@@ -276,8 +276,12 @@ class AternosManager {
         return results;
     }
 
+    browserPID() {
+        return this.browser.process().pid;
+    }
+
     async checkMemoryUsage() {
-        const usageStats = await pidusage(this.browser.process().pid);
+        const usageStats = await pidusage(this.browserPID());
         if (usageStats.memory > MAX_MEMORY_ALLOWED) {
             await this.cleanup(true);
             await this.initialize();

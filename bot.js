@@ -16,6 +16,11 @@ const bot = new Discord.Client();
 
 const nodeCleanup = require('node-cleanup');
 
+const pidusage = require('pidusage');
+const prettyMS = require('pretty-ms');
+const roundTo = require('round-to');
+const prettyBytes = require('pretty-bytes');
+
 const { AternosManager, AternosStatus, AternosException, ManagerStatus } = require('./aternos-manager');
 
 // Totally not a KDE reference :P
@@ -124,6 +129,32 @@ const BOT_CMDS = {
         adminOnly: true,
         async execute(msg) {
             await Konsole.toggleMaintainance(false);
+        }
+    },
+    GetUsageStatistics: {
+        name: 'usage stats',
+        description: "Fetches the bot's and the browsers usage stats.",
+        adminOnly: true,
+        async execute(msg) {
+            const processPID = process.pid;
+            const browserPID = Konsole.browserPID();
+
+            const processUsage = await pidusage(processPID);
+            const browserUsage = await pidusage(browserPID);
+
+            await msg.channel.send([
+                'Process Usage:',
+                `- **CPU**: ${roundTo(processUsage.cpu, 1)} %`,
+                `- **RAM**: ${prettyBytes(processUsage.memory)}`,
+                `- **Uptime**: ${prettyMS(processUsage.elapsed)}`,
+            ].join('\n'));
+
+            await msg.channel.send([
+                'Browser Usage:',
+                `- **CPU**: ${roundTo(browserUsage.cpu, 1)} %`,
+                `- **RAM**: ${prettyBytes(browserUsage.memory)}`,
+                `- **Uptime**: ${prettyMS(browserUsage.elapsed)}`,
+            ].join('\n'));
         }
     }
 };
