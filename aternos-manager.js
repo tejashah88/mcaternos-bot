@@ -96,7 +96,8 @@ class StatusTracker extends EventEmitter {
     }
 
     addHook(fn) {
-        this.on(this.eventName, fn);
+        if (!this.rawListeners(this.eventName).includes(fn))
+            this.on(this.eventName, fn);
     }
 
     removeHook(fn) {
