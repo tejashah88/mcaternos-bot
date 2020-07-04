@@ -14,7 +14,7 @@ const ATERNOS_LOGIN_URL         = 'https://aternos.org/go/';
 const ATERNOS_SERVER_SELECT_URL = 'https://aternos.org/servers/';
 const ATERNOS_CONSOLE_URL       = 'https://aternos.org/server/';
 
-const STATUS_UPDATE_INTERVAL = 1000;               // 1 second
+const STATUS_UPDATE_INTERVAL = 2500;               // 2.5 seconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
 
 const MAINTAINANCE_LOCK_FILE = 'maintainance.lock';
