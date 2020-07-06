@@ -315,6 +315,38 @@ class AternosManager extends StatusTrackerMap {
 
         return { quotaUsage, backupFiles };
     }
+
+    async createBackup(backupName, { onBackupStart = function () {}, onBackupFinish = function () {} }) {
+        const backupPage = await this.browser.newPage();
+        await backupPage.goto(ATERNOS_BACKUP_URL);
+        await backupPage.waitForSelector('.backups');
+
+        if (backupName.length > 100)
+            throw AternosException('Backup name specified is longer than 100 characters!')
+
+        await backupPage.type('#backup-create-input', backupName);
+        await backupPage.click('#backup-create-btn');
+
+        await onBackupStart();
+
+        // Source: https://stackoverflow.com/a/57894554
+        const cdp = await backupPage.target().createCDPSession();
+        await cdp.send('Network.enable');
+        await cdp.send('Page.enable');
+
+        const onBackupProgress = async wsRes => {
+            const wsMsg = JSON.parse(wsRes.response.payloadData);
+            const msgType = wsMsg.type;
+            const msgPayload = JSON.parse(wsMsg.message);
+
+            if (msgType == 'backup_progress' && msgPayload.done) {
+                cdp.off('Network.webSocketFrameReceived', onBackupProgress);
+                await onBackupFinish();
+            }
+        };
+
+        cdp.on('Network.webSocketFrameReceived', onBackupProgress); // Fired when WebSocket message is received.
+    }
 }
 
 module.exports = { AternosManager, AternosStatus, AternosException, ManagerStatus };
