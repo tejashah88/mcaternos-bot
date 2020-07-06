@@ -189,10 +189,31 @@ const BOT_CMDS = {
         acceptsArgs: true,
         async execute(msg, args) {
             const backupName = args[0];
-            await Konsole.createBackup(backupName, {
-                onBackupStart: async () => await msg.channel.send(`Backing up the universe under the name of '${backupName}' as we speak...`),
-                onBackupFinish: async () => await msg.channel.send('The backup has finished!')
-            });
+            const backupCache = Konsole.getStatus('backupCache');
+
+            // Make sure that we only create a backup when the name is unique
+            if (backupCache.filter(file => file.name == backupName).length === 0) {
+                await msg.channel.send(`Backing up the universe under the name of '${backupName}' as we speak...`);
+                await Konsole.createBackup(backupName, async () => await msg.channel.send('The backup has finished!'));
+            } else
+                await msg.channel.send("You can't create another backup of the same name!");
+        }
+    },
+    DeleteBackup: {
+        name: 'delete backup',
+        description: 'Delets a backup at the given position on the list of backups.',
+        adminOnly: true,
+        acceptsArgs: true,
+        async execute(msg, args) {
+            const backupName = args[0];
+            const backupCache = Konsole.getStatus('backupCache');
+
+            // Make sure that we only delete a backup when the name exists
+            if (backupCache.filter(file => file.name == backupName).length > 0) {
+                await msg.channel.send(`Deleting backup of the universe under the name of '${backupName}' as we speak...`);
+                await Konsole.deleteBackup(backupName, async () => await msg.channel.send('The backup deletion has finished!'));
+            } else
+                await msg.channel.send("You can't delete a backup whose name doesn't exist!");
         }
     }
 };

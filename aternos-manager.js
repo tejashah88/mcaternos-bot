@@ -58,6 +58,7 @@ class AternosManager extends StatusTrackerMap {
         super();
 
         this.console = null;
+        this.backupPage = null;
         this.statusLoop = null;
 
         this.url = options.server;
@@ -68,7 +69,7 @@ class AternosManager extends StatusTrackerMap {
         this.addTracker('fullServerStatus', { deep: true });
         this.addTracker('maintainanceStatus', { allowed: [true, false] });
         this.addTracker('managerStatus', { allowed: ManagerStatus });
-        this.addTracker('backupStatus', { allowed: BackupStatus });
+        this.addTracker('backupCache', { deep: true });
 
         this.addHook('maintainanceStatus', async (onMaintainance) => {
             await fs.promises.writeFile(MAINTAINANCE_LOCK_FILE, onMaintainance);
@@ -105,8 +106,13 @@ class AternosManager extends StatusTrackerMap {
             await this.checkMemoryUsage();
         }, STATUS_UPDATE_INTERVAL);
 
+        // Setup backups page for commands and auto-backup
+        this.backupPage = await this.browser.newPage();
+        await this.backupPage.goto(ATERNOS_BACKUP_URL);
+        await this.backupPage.waitForSelector('.backups');
+        await this.listBackups();
+
         this.setStatus('managerStatus', ManagerStatus.READY);
-        this.setStatus('backupStatus', BackupStatus.IDLE);
     }
 
     async cleanup(restarting = false) {
@@ -126,13 +132,18 @@ class AternosManager extends StatusTrackerMap {
         if (!restarting)
             this.removeAllListeners();
 
+        if (this.backupPage != null) {
+            await this.backupPage.close();
+            this.backupPage = null;
+        }
+
         if (this.console != null) {
-            this.console.close();
+            await this.console.close();
             this.console = null;
         }
 
         if (this.browser != null) {
-            this.browser.close();
+            await this.browser.close();
             this.browser = null;
         }
     }
@@ -298,54 +309,49 @@ class AternosManager extends StatusTrackerMap {
     }
 
     async listBackups() {
-        const backupPage = await this.browser.newPage();
-        await backupPage.goto(ATERNOS_BACKUP_URL);
-        await backupPage.waitForSelector('.backups');
+        await this.backupPage.reload({ waitUntil: ['domcontentloaded'] });
 
-        const quotaUsage = await backupPage.$eval('.backup-quota-usage', elem => elem.innerText);
-
-        const backupFiles = await backupPage.$$eval('.backups > .file > .filename', elems => {
+        const quotaUsage = await this.backupPage.$eval('.backup-quota-usage', elem => elem.innerText);
+        const backupFiles = await this.backupPage.$$eval('.backups > .file', elems => {
             return elems.map(e => ({
-                name: e.childNodes[0].textContent.trim(),
-                datetime: e.childNodes[1].textContent.trim(),
+                id: e.attributes.id.value.substring('backup-'.length),
+                name: e.children[0].childNodes[0].textContent.trim(),
+                datetime: e.children[0].childNodes[1].textContent.trim(),
+                filesize: e.children[2].innerText,
             }));
         });
 
-        await backupPage.close();
+        this.setStatus('backupCache', backupFiles);
 
         return { quotaUsage, backupFiles };
     }
 
-    async createBackup(backupName, { onBackupStart = function () {}, onBackupFinish = function () {} }) {
-        const backupPage = await this.browser.newPage();
-        await backupPage.goto(ATERNOS_BACKUP_URL);
-        await backupPage.waitForSelector('.backups');
-
+    async createBackup(backupName, onBackupFinish = function () {}) {
         if (backupName.length > 100)
             throw AternosException('Backup name specified is longer than 100 characters!')
 
-        await backupPage.type('#backup-create-input', backupName);
-        await backupPage.click('#backup-create-btn');
+        await this.backupPage.type('#backup-create-input', backupName);
 
-        await onBackupStart();
+        await Promise.all([
+            this.backupPage.click('#backup-create-btn'),
+            this.backupPage.waitForNavigation(),
+        ]);
 
-        // Source: https://stackoverflow.com/a/57894554
-        const cdp = await backupPage.target().createCDPSession();
-        await cdp.send('Network.enable');
-        await cdp.send('Page.enable');
+        await onBackupFinish();
+    }
 
-        const onBackupProgress = async wsRes => {
-            const wsMsg = JSON.parse(wsRes.response.payloadData);
-            const msgType = wsMsg.type;
-            const msgPayload = JSON.parse(wsMsg.message);
+    async deleteBackup(backupName, onBackupDeleteFinish = function () {}) {
+        await this.backupPage.waitForSelector('.backup-remove-btn');
+        const allDeleteBtns = await this.backupPage.$$(`.backup-remove-btn`);
+        const backupIndex = this.getStatus('backupCache').findIndex(file => file.name == backupName);
+        await allDeleteBtns[backupIndex].click();
+        
+        await Promise.all([
+            await this.backupPage.click('.btn-green'),
+            this.backupPage.waitForNavigation()
+        ]);
 
-            if (msgType == 'backup_progress' && msgPayload.done) {
-                cdp.off('Network.webSocketFrameReceived', onBackupProgress);
-                await onBackupFinish();
-            }
-        };
-
-        cdp.on('Network.webSocketFrameReceived', onBackupProgress); // Fired when WebSocket message is received.
+        await onBackupDeleteFinish();
     }
 }
 
