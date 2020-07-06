@@ -1,13 +1,13 @@
 const fs = require('fs');
-const EventEmitter = require('events').EventEmitter;
 
 const { setIntervalAsync } = require('set-interval-async/fixed');
 const { clearIntervalAsync } = require('set-interval-async');
 
-const deepEqual = require('deep-equal');
 const puppeteer = require('puppeteer');
 const pidusage = require('pidusage');
 const delay = require('delay');
+
+const { StatusTrackerMap } = require('./status-tracker');
 
 const ATERNOS_HOME_URL          = 'https://aternos.org/:en/';
 const ATERNOS_LOGIN_URL         = 'https://aternos.org/go/';
@@ -38,10 +38,6 @@ const ManagerStatus = {
     STOPPING:     8,
 }
 
-// Source: https://stackoverflow.com/a/16608045
-isArray = (x) => (!!x) && (x.constructor === Array);
-isObject = (x) => (!!x) && (x.constructor === Object)
-
 // Source: https://gist.github.com/slavafomin/b164e3e710a6fc9352c934b9073e7216
 class AternosException extends Error {
     constructor (message, status) {
@@ -56,61 +52,10 @@ class AternosException extends Error {
     }
 }
 
-class StatusTracker extends EventEmitter {
-    constructor(eventName, { initial = null, deep = false, allowed = true } = {}) {
+class AternosManager extends StatusTrackerMap {
+    constructor(options) {
         super();
 
-        this.eventName = eventName;
-        this.deepStatus = deep;
-        this.allowedValues = allowed;
-
-        this.currentStatus = initial;
-        this.prevStatus = null;
-    }
-
-    set(newStatus, forceUpdate = false) {
-        const arrayCheckFail = isArray(this.allowedValues) && !this.allowedValues.includes(newStatus);
-        const objectCheckFail = isObject(this.allowedValues) && !Object.values(this.allowedValues).includes(newStatus);
-        
-        if (arrayCheckFail || objectCheckFail)
-            throw new Error(`Status tracker of event '${this.eventName}' received invalid status '${newStatus}'`);
-
-        this.prevStatus = this.currentStatus;
-        this.currentStatus = newStatus;
-
-        if (!this.deepStatus) {
-            if (forceUpdate || this.currentStatus != this.prevStatus)
-                this.emit(this.eventName, this.currentStatus, this.prevStatus, forceUpdate);
-        } else {
-            if (forceUpdate || !deepEqual(this.currentStatus, this.prevStatus))
-                this.emit(this.eventName, this.currentStatus, this.prevStatus, forceUpdate);
-        }
-    }
-
-    get() {
-        return this.currentStatus;
-    }
-
-    forceUpdate() {
-        this.set(this.currentStatus, true);
-    }
-
-    addHook(fn) {
-        if (!this.rawListeners(this.eventName).includes(fn))
-            this.on(this.eventName, fn);
-    }
-
-    removeHook(fn) {
-        this.off(this.eventName, fn);
-    }
-
-    removeAllHooks() {
-        this.removeAllListeners(this.eventName);
-    }
-}
-
-class AternosManager {
-    constructor(options) {
         this.console = null;
         this.statusLoop = null;
 
@@ -118,18 +63,18 @@ class AternosManager {
         this.user = options.username;
         this.pass = options.password;
 
-        this.serverStatus = new StatusTracker('serverStatus', { allowed: AternosStatus });
-        this.fullServerStatus = new StatusTracker('fullServerStatus', { deep: true });
-        this.maintainanceStatus = new StatusTracker('maintainanceStatus', { allowed: [true, false] });
-        this.managerStatus = new StatusTracker('managerStatus', { allowed: ManagerStatus });
+        this.addTracker('serverStatus', { allowed: AternosStatus });
+        this.addTracker('fullServerStatus', { deep: true });
+        this.addTracker('maintainanceStatus', { allowed: [true, false] });
+        this.addTracker('managerStatus', { allowed: ManagerStatus });
 
-        this.maintainanceStatus.addHook(async (onMaintainance) => {
+        this.addHook('maintainanceStatus', async (onMaintainance) => {
             await fs.promises.writeFile(MAINTAINANCE_LOCK_FILE, onMaintainance);
-        })
+        });
     }
 
     async initialize() {
-        this.managerStatus.set(ManagerStatus.INITIALIZING);
+        this.setStatus('managerStatus', ManagerStatus.INITIALIZING);
 
         if (!this.browser)
             this.browser = await puppeteer.launch({ handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false });
@@ -140,7 +85,7 @@ class AternosManager {
         if (fs.existsSync(MAINTAINANCE_LOCK_FILE)) {
             const contents = await fs.promises.readFile(MAINTAINANCE_LOCK_FILE, 'utf-8');
             this.toggleMaintainance(contents == 'true');
-            console.log(`Konsole: Starting in ${this.maintainanceStatus.get() ? 'maintainance' : 'production'} mode!`);
+            console.log(`Konsole: Starting in ${this.getStatus('maintainanceStatus') ? 'maintainance' : 'production'} mode!`);
         }
 
         // Call this once to ensure that we have a status reading of the server
@@ -152,16 +97,16 @@ class AternosManager {
             await this.checkMemoryUsage();
         }, STATUS_UPDATE_INTERVAL);
 
-        this.managerStatus.set(ManagerStatus.READY);
+        this.setStatus('managerStatus', ManagerStatus.READY);
     }
 
     async cleanup(restarting = false) {
         if (restarting) {
             console.log('Konsole: Restarting console page...');
-            this.managerStatus.set(ManagerStatus.RESTARTING);
+            this.setStatus('managerStatus', ManagerStatus.RESTARTING);
         } else {
             console.log('Konsole: Stopping console page...');
-            this.managerStatus.set(ManagerStatus.STOPPING);
+            this.setStatus('managerStatus', ManagerStatus.STOPPING);
         }
 
         if (this.statusLoop != null) {
@@ -184,10 +129,7 @@ class AternosManager {
     }
 
     removeAllListeners() {
-        this.serverStatus.removeAllHooks();
-        this.fullServerStatus.removeAllHooks();
-        this.maintainanceStatus.removeAllHooks();
-        this.managerStatus.removeAllHooks();
+        this.removeAllTrackers();
     }
 
     async isLoggedIn() {
@@ -237,23 +179,23 @@ class AternosManager {
     }
 
     toggleMaintainance(newVal) {
-        this.maintainanceStatus.set(newVal);
+        this.setStatus('maintainanceStatus', newVal);
     }
 
     isInMaintainance() {
-        return this.maintainanceStatus.get();
+        return !!this.getStatus('maintainanceStatus');
     }
 
     hasCrashed() {
-        return this.serverStatus.get() == AternosStatus.CRASHED;
+        return this.getStatus('serverStatus') == AternosStatus.CRASHED;
     }
 
     isReady() {
-        return this.managerStatus.get() == ManagerStatus.READY;
+        return this.getStatus('managerStatus') == ManagerStatus.READY;
     }
 
     async checkStatus(forceUpdate = false) {
-        if (this.managerStatus.get() != ManagerStatus.READY)
+        if (this.getStatus('managerStatus') != ManagerStatus.READY)
             return;
 
         const results = await this.console.evaluate(() => {
@@ -271,8 +213,8 @@ class AternosManager {
             };
         });
 
-        this.serverStatus.set(results.serverStatus, forceUpdate);
-        this.fullServerStatus.set(results, forceUpdate);
+        this.setStatus('serverStatus', results.serverStatus, forceUpdate);
+        this.setStatus('fullServerStatus', results, forceUpdate);
 
         return results;
     }
@@ -334,7 +276,7 @@ class AternosManager {
             // This is for the edge case when the user is requesting to start the server when the bot isn't ready
             if (that.isReady()) {
                 await that.console.click('#start');
-                that.managerStatus.removeHook(attemptStartServer);
+                that.removeHook('managerStatus', attemptStartServer);
 
                 // Hide notifications alert after 1 second
                 await delay(1000);
@@ -342,8 +284,8 @@ class AternosManager {
             }
         }
 
-        this.managerStatus.addHook(attemptStartServer);
-        this.managerStatus.forceUpdate();
+        this.addHook('managerStatus', attemptStartServer);
+        this.forceStatusUpdate('managerStatus');
     }
 }
 

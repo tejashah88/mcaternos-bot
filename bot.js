@@ -87,14 +87,14 @@ const BOT_CMDS = {
 
             if (Konsole.hasCrashed() && !isAdminUser) {
                 await msg.channel.send('The server has crashed! Please wait while a server admin resolves the issue.')
-            } else if ([AternosStatus.OFFLINE, AternosStatus.CRASHED].includes(Konsole.serverStatus.get())) {
+            } else if ([AternosStatus.OFFLINE, AternosStatus.CRASHED].includes(Konsole.getStatus('serverStatus'))) {
                 await msg.channel.send('Starting the server...');
 
                 async function onDetectOnline(newStatus) {
                     if (newStatus == AternosStatus.ONLINE) {
                         await msg.channel.send('Server is online!');
-                        Konsole.serverStatus.removeHook(onDetectOnline);
-                        Konsole.serverStatus.removeHook(onFailToEscapeQueue);
+                        Konsole.removeHook('serverStatus', onDetectOnline);
+                        Konsole.removeHook('serverStatus', onFailToEscapeQueue);
                     }
                 }
 
@@ -102,17 +102,17 @@ const BOT_CMDS = {
                     if (newStatus == AternosStatus.OFFLINE && oldStatus == AternosStatus.IN_QUEUE) {
                         await msg.channel.send('Something went wrong when trying to escape the queue. Maybe an AD is in the way?');
                         await Konsole.console.screenshot({ path: `fail-queue-${+new Date()}.png`});
-                        Konsole.serverStatus.removeHook(onDetectOnline);
-                        Konsole.serverStatus.removeHook(onFailToEscapeQueue);
+                        Konsole.removeHook('serverStatus', onDetectOnline);
+                        Konsole.removeHook('serverStatus', onFailToEscapeQueue);
                     }
                 }
 
-                Konsole.serverStatus.addHook(onDetectOnline);
-                Konsole.serverStatus.addHook(onFailToEscapeQueue);
+                Konsole.addHook('serverStatus', onDetectOnline);
+                Konsole.addHook('serverStatus', onFailToEscapeQueue);
 
                 await Konsole.requestStartServer();
             } else {
-                await msg.channel.send(`Server is not offline! It is ${Konsole.serverStatus.get()}`);
+                await msg.channel.send(`Server is not offline! It is ${Konsole.getStatus('serverStatus')}`);
             }
         }
     },
@@ -286,24 +286,26 @@ bot.on('message', async msg => {
         await bot.login(config.discord.CHAT_TOKEN);
 
         // Attach listener for full server status
-        Konsole.fullServerStatus.addHook(updateBotStatus);
+        Konsole.addHook('fullServerStatus', updateBotStatus);
 
         // Attach listener for maintainance status update
-        Konsole.maintainanceStatus.addHook(onMaintainanceStatusUpdate)
+        Konsole.addHook('maintainanceStatus', onMaintainanceStatusUpdate)
 
         // Attach listener for manager status update
-        Konsole.managerStatus.addHook(onConsoleStatusUpdate);
+        Konsole.addHook('managerStatus', onConsoleStatusUpdate);
 
         // Initialize the Aternos console access
         await Konsole.initialize();
 
         // Notify PM2 that we are ready
-        process.send('ready');
+        if (process.send !== undefined)
+            process.send('ready');
     } catch (err) {
         if (err instanceof AternosException) {
             console.error(`ERROR: ${err}`);
             // We send a SIGINT to ourselves to make sure the bot cleans itself up
             process.kill(process.pid, 'SIGINT');
-        }
+        } else
+            throw err;
     }
 })();
