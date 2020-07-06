@@ -189,14 +189,11 @@ const BOT_CMDS = {
         acceptsArgs: true,
         async execute(msg, args) {
             const backupName = args[0];
-            const backupCache = Konsole.getStatus('backupCache');
-
-            // Make sure that we only create a backup when the name is unique
-            if (backupCache.filter(file => file.name == backupName).length === 0) {
-                await msg.channel.send(`Backing up the universe under the name of '${backupName}' as we speak...`);
-                await Konsole.createBackup(backupName, async () => await msg.channel.send('The backup has finished!'));
-            } else
-                await msg.channel.send("You can't create another backup of the same name!");
+            await Konsole.createBackup(backupName, {
+                onStart: async () => await msg.channel.send(`Backing up the universe under the name of '${backupName}' as we speak...`),
+                onFinish: async () => await msg.channel.send('The backup has finished!'),
+                onFail: async errMsg => await msg.channel.send(`**Warning**: ${errMsg}`),
+            });
         }
     },
     DeleteBackup: {
@@ -206,14 +203,11 @@ const BOT_CMDS = {
         acceptsArgs: true,
         async execute(msg, args) {
             const backupName = args[0];
-            const backupCache = Konsole.getStatus('backupCache');
-
-            // Make sure that we only delete a backup when the name exists
-            if (backupCache.filter(file => file.name == backupName).length > 0) {
-                await msg.channel.send(`Deleting backup of the universe under the name of '${backupName}' as we speak...`);
-                await Konsole.deleteBackup(backupName, async () => await msg.channel.send('The backup deletion has finished!'));
-            } else
-                await msg.channel.send("You can't delete a backup whose name doesn't exist!");
+            await Konsole.deleteBackup(backupName, {
+                onStart: async () => await msg.channel.send(`Deleting backup of the universe under the name of '${backupName}' as we speak...`),
+                onFinish: async () => await msg.channel.send('The backup deletion has finished!'),
+                onFail: async errMsg => await msg.channel.send(`**Warning**: ${errMsg}`),
+            });
         }
     }
 };
@@ -342,6 +336,19 @@ async function updateBotStatus(newFullStatus) {
     console.log('NOTICE:', outputMsg);
 }
 
+async function handleBackupGeneration(newStatus, oldStatus, forceUpdate) {
+    if (newStatus == AternosStatus.OFFLINE && oldStatus != null && !forceUpdate) {
+        console.log('Konsole: Creating backup now that server is offline...');
+        await Konsole.createBackup(`Automatic backup @ ${new Date().toLocaleString().replace(',', ' -')}`);
+        const numBackups = (await Konsole.listBackups()).backupFiles.length;
+
+        if (numBackups > parseInt(config.aternos.BACKUP_LIMIT)) {
+            console.log('Konsole: Deleting oldest backup to maintain backup limit...');
+            await Konsole.deleteOldestBackup();
+        }
+    }
+}
+
 // Add listener for when bot is fully initialized
 bot.once('ready', () => {
     console.info(`Logged in as ${bot.user.tag}!`);
@@ -388,6 +395,9 @@ bot.on('message', async msg => {
 
         // Attach listener for full server status
         Konsole.addHook('fullServerStatus', updateBotStatus);
+
+        // Attach listener for triggering backups when server becomes offline
+        Konsole.addHook('serverStatus', handleBackupGeneration);
 
         // Attach listener for maintainance status update
         Konsole.addHook('maintainanceStatus', onMaintainanceStatusUpdate)

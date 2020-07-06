@@ -69,7 +69,6 @@ class AternosManager extends StatusTrackerMap {
         this.addTracker('fullServerStatus', { deep: true });
         this.addTracker('maintainanceStatus', { allowed: [true, false] });
         this.addTracker('managerStatus', { allowed: ManagerStatus });
-        this.addTracker('backupCache', { deep: true });
 
         this.addHook('maintainanceStatus', async (onMaintainance) => {
             await fs.promises.writeFile(MAINTAINANCE_LOCK_FILE, onMaintainance);
@@ -100,17 +99,17 @@ class AternosManager extends StatusTrackerMap {
         // Call this once to ensure that we have a status reading of the server
         await this.checkStatus(true);
 
-        console.log('Konsole: Starting status and memory scanning loop...');
-        this.statusLoop = setIntervalAsync(async () => {
-            await this.checkStatus();
-            await this.checkMemoryUsage();
-        }, STATUS_UPDATE_INTERVAL);
-
         // Setup backups page for commands and auto-backup
         this.backupPage = await this.browser.newPage();
         await this.backupPage.goto(ATERNOS_BACKUP_URL);
         await this.backupPage.waitForSelector('.backups');
         await this.listBackups();
+
+        console.log('Konsole: Starting status and memory scanning loop...');
+        this.statusLoop = setIntervalAsync(async () => {
+            await this.checkStatus();
+            await this.checkMemoryUsage();
+        }, STATUS_UPDATE_INTERVAL);
 
         this.setStatus('managerStatus', ManagerStatus.READY);
     }
@@ -321,37 +320,66 @@ class AternosManager extends StatusTrackerMap {
             }));
         });
 
-        this.setStatus('backupCache', backupFiles);
-
         return { quotaUsage, backupFiles };
     }
 
-    async createBackup(backupName, onBackupFinish = function () {}) {
-        if (backupName.length > 100)
-            throw AternosException('Backup name specified is longer than 100 characters!')
+    async createBackup(backupName, { onStart = function () {}, onFinish = function () {}, onFail = function () {} } = {}) {
+        if (backupName.length > 100) {
+            await onFail('Backup name specified is longer than 100 characters!')
+            return;
+        }
+
+        // Make sure that we only create a backup when the name is unique
+        const { backupFiles } = await this.listBackups();
+        if (backupFiles.filter(file => file.name == backupName).length > 0) {
+            await onFail("You can't create another backup of the same name!");
+            return;
+        }
 
         await this.backupPage.type('#backup-create-input', backupName);
+
+        await onStart();
 
         await Promise.all([
             this.backupPage.click('#backup-create-btn'),
             this.backupPage.waitForNavigation(),
         ]);
 
-        await onBackupFinish();
+        await onFinish();
     }
 
-    async deleteBackup(backupName, onBackupDeleteFinish = function () {}) {
+    async _deleteBackupByIndex(backupIndex, { onStart = function () {}, onFinish = function () {} } = {}) {
         await this.backupPage.waitForSelector('.backup-remove-btn');
         const allDeleteBtns = await this.backupPage.$$(`.backup-remove-btn`);
-        const backupIndex = this.getStatus('backupCache').findIndex(file => file.name == backupName);
         await allDeleteBtns[backupIndex].click();
         
+        await onStart();
+
         await Promise.all([
             await this.backupPage.click('.btn-green'),
             this.backupPage.waitForNavigation()
         ]);
 
-        await onBackupDeleteFinish();
+        await onFinish();
+    }
+
+    async deleteBackup(backupName, { onStart = function () {}, onFinish = function () {}, onFail = function () {} } = {}) {
+        const { backupFiles } = await this.listBackups();
+        const backupIndex = backupFiles.findIndex(file => file.name == backupName);
+
+        // Make sure that we only delete a backup when the name exists
+        if (backupIndex == -1) {
+            await onFail("You can't delete a backup whose name doesn't exist!");
+            return;
+        }
+
+        await this._deleteBackupByIndex(backupIndex, { onStart, onFinish, onFail });
+    }
+
+    async deleteOldestBackup({ onStart = function () {}, onFinish = function () {}, onFail = function () {} } = {}) {
+        const { backupFiles } = await this.listBackups();
+        const lastBackupIndex = backupFiles.length - 1;
+        await this._deleteBackupByIndex(lastBackupIndex, { onStart, onFinish, onFail });
     }
 }
 
