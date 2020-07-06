@@ -159,6 +159,23 @@ const BOT_CMDS = {
                 `- **Uptime**: ${prettyMS(browserUsage.elapsed)}`,
             ].join('\n'));
         }
+    },
+    ListBackups: {
+        name: 'list backups',
+        description: "Lists all the backups created for the Aternos server.",
+        adminOnly: true,
+        async execute(msg) {
+            const { quotaUsage, backupFiles } = await Konsole.listBackups();
+
+            await msg.channel.send([
+                `Number of backups: ${backupFiles.length}`,
+                `Disk Usage: ${quotaUsage}`,
+            ].join('\n'));
+
+            await msg.channel.send(
+                backupFiles.map((file, i) => `${i + 1}) **${file.name}** - *${file.datetime}*`).join('\n')
+            );
+        }
     }
 };
 

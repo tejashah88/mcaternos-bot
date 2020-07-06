@@ -13,6 +13,7 @@ const ATERNOS_HOME_URL          = 'https://aternos.org/:en/';
 const ATERNOS_LOGIN_URL         = 'https://aternos.org/go/';
 const ATERNOS_SERVER_SELECT_URL = 'https://aternos.org/servers/';
 const ATERNOS_CONSOLE_URL       = 'https://aternos.org/server/';
+const ATERNOS_BACKUP_URL        = 'https://aternos.org/backups/';
 
 const STATUS_UPDATE_INTERVAL = 2500;               // 2.5 seconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
@@ -36,6 +37,12 @@ const ManagerStatus = {
     READY:        2,
     RESTARTING:   4,
     STOPPING:     8,
+}
+
+const BackupStatus = {
+    IDLE:      1,
+    WORKING:   2,
+    MAX_LIMIT: 4,
 }
 
 // Source: https://gist.github.com/slavafomin/b164e3e710a6fc9352c934b9073e7216
@@ -67,6 +74,7 @@ class AternosManager extends StatusTrackerMap {
         this.addTracker('fullServerStatus', { deep: true });
         this.addTracker('maintainanceStatus', { allowed: [true, false] });
         this.addTracker('managerStatus', { allowed: ManagerStatus });
+        this.addTracker('backupStatus', { allowed: BackupStatus });
 
         this.addHook('maintainanceStatus', async (onMaintainance) => {
             await fs.promises.writeFile(MAINTAINANCE_LOCK_FILE, onMaintainance);
@@ -76,8 +84,14 @@ class AternosManager extends StatusTrackerMap {
     async initialize() {
         this.setStatus('managerStatus', ManagerStatus.INITIALIZING);
 
-        if (!this.browser)
-            this.browser = await puppeteer.launch({ handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false });
+        if (!this.browser) {
+            this.browser = await puppeteer.launch({
+                headless: true,
+                handleSIGINT: false,
+                handleSIGTERM: false,
+                handleSIGHUP: false
+            });
+        }
 
         await this.login(this.user, this.pass);
         await this.selectServerFromList();
@@ -98,6 +112,7 @@ class AternosManager extends StatusTrackerMap {
         }, STATUS_UPDATE_INTERVAL);
 
         this.setStatus('managerStatus', ManagerStatus.READY);
+        this.setStatus('backupStatus', BackupStatus.IDLE);
     }
 
     async cleanup(restarting = false) {
@@ -167,7 +182,7 @@ class AternosManager extends StatusTrackerMap {
 
         let errorMsg = null;
         try {
-            errorMsg = await this.console.$eval('.login-error', elem => elem.textContent.trim());
+            errorMsg = await this.console.$eval('.login-error', elem => elem.innerText);
         } catch (err) {
             // NOTE: Error is ignored because the tab has teleported to a new URL and it can't find the 'login-error' element
         }
@@ -199,7 +214,7 @@ class AternosManager extends StatusTrackerMap {
             return;
 
         const results = await this.console.evaluate(() => {
-            const $cleanedText = selector => document.querySelector(selector).textContent.trim();
+            const $cleanedText = selector => document.querySelector(selector).innerText;
             const status      = $cleanedText('.statuslabel-label').toLowerCase();
             const playerCount = $cleanedText('#players');
             const qTime       = $cleanedText('.queue-time').toLowerCase();
@@ -252,7 +267,7 @@ class AternosManager extends StatusTrackerMap {
 
         // Select the correct server from the list
         const serverIndex = await this.console.$$eval('.server-name', (elems, targetUrl) => {
-            return elems.map(e => e.textContent.trim() == targetUrl.split('.').shift()).indexOf(true);
+            return elems.map(e => e.innerText == targetUrl.split('.').shift()).indexOf(true);
         }, this.url);
 
         if (serverIndex == -1)
@@ -286,6 +301,25 @@ class AternosManager extends StatusTrackerMap {
 
         this.addHook('managerStatus', attemptStartServer);
         this.forceStatusUpdate('managerStatus');
+    }
+
+    async listBackups() {
+        const backupPage = await this.browser.newPage();
+        await backupPage.goto(ATERNOS_BACKUP_URL);
+        await backupPage.waitForSelector('.backups');
+
+        const quotaUsage = await backupPage.$eval('.backup-quota-usage', elem => elem.innerText);
+
+        const backupFiles = await backupPage.$$eval('.backups > .file > .filename', elems => {
+            return elems.map(e => ({
+                name: e.childNodes[0].textContent.trim(),
+                datetime: e.childNodes[1].textContent.trim(),
+            }));
+        });
+
+        await backupPage.close();
+
+        return { quotaUsage, backupFiles };
     }
 }
 
