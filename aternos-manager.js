@@ -39,12 +39,6 @@ const ManagerStatus = {
     STOPPING:     8,
 }
 
-const BackupStatus = {
-    IDLE:      1,
-    WORKING:   2,
-    MAX_LIMIT: 4,
-}
-
 // Source: https://gist.github.com/slavafomin/b164e3e710a6fc9352c934b9073e7216
 class AternosException extends Error {
     constructor (message, status) {

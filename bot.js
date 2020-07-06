@@ -82,6 +82,7 @@ const BOT_CMDS = {
         name: 'start server',
         description: 'Starts the Aternos server.',
         adminOnly: false,
+        acceptsArgs: false,
         async execute(msg) {
             const isAdminUser = config.discord.ADMINS.includes(msg.author.tag);
 
@@ -120,6 +121,7 @@ const BOT_CMDS = {
         name: 'maintainance on',
         description: 'Enables maintainance mode. Only the owner is able to send commands to the bot if maintainance is enabled.',
         adminOnly: true,
+        acceptsArgs: false,
         async execute(msg) {
             await Konsole.toggleMaintainance(true);
             await msg.channel.send('Bot will not listen to anyone except for admins!');
@@ -129,6 +131,7 @@ const BOT_CMDS = {
         name: 'maintainance off',
         description: 'Disables maintainance mode. Everyone with access to the bot can send commands if maintainance is disabled.',
         adminOnly: true,
+        acceptsArgs: false,
         async execute(msg) {
             await Konsole.toggleMaintainance(false);
             await msg.channel.send('Bot is now all ears to everyone!');
@@ -138,6 +141,7 @@ const BOT_CMDS = {
         name: 'usage stats',
         description: "Fetches the bot's and the browsers usage stats.",
         adminOnly: true,
+        acceptsArgs: false,
         async execute(msg) {
             const processPID = process.pid;
             const browserPID = Konsole.browserPID();
@@ -162,8 +166,9 @@ const BOT_CMDS = {
     },
     ListBackups: {
         name: 'list backups',
-        description: "Lists all the backups created for the Aternos server.",
+        description: 'Lists all the backups created for the Aternos server.',
         adminOnly: true,
+        acceptsArgs: false,
         async execute(msg) {
             const { quotaUsage, backupFiles } = await Konsole.listBackups();
 
@@ -179,11 +184,81 @@ const BOT_CMDS = {
     }
 };
 
+class BotCommander {
+    constructor() {
+        this.commands = {};
+    }
+
+    addCommand(cmd) {
+        if (!this.commands.hasOwnProperty(cmd.name))
+            this.commands[cmd.name] = cmd;
+        else
+            throw Exception(`Bot already has command '${cmd.name}' registered!`);
+    }
+
+    addCommands(cmds) {
+        for (let cmd of cmds)
+            this.addCommand(cmd);
+    }
+
+    async parseAndExecute(msg) {
+        const cmdString = msg.content.trim().split(/ +/).slice(1).join(' ');
+        const user = msg.author.tag;
+        const isAdminUser = config.discord.ADMINS.includes(user);
+
+        let foundMatch = false;
+
+        for (let command of Object.keys(this.commands)) {
+            const cmd = this.commands[command];
+
+            const validNoArgs = !cmd.acceptsArgs && cmdString == command;
+            const validWithArgs = !!cmd.acceptsArgs && cmdString.startsWith(command + ' ');
+
+            if (validNoArgs || validWithArgs) {
+                foundMatch = true;
+                // We have a match, but let's make sure the user can actually execute it first
+
+                // Only admins should be able to run admin-only commands (duh!)
+                if (cmd.adminOnly && !isAdminUser) {
+                    await msg.channel.send('This command is for admins only!');
+                    return;
+                }
+
+                // Can't let anyone run bot commands when in maintainance mode
+                if (Konsole.isInMaintainance() && !isAdminUser) {
+                    await msg.channel.send('**ALERT**: Bot is in maintainance mode and will ignore you unless told otherwise by the server admins!');
+                    return;
+                }
+
+                const command = cmd.name;
+                let args;
+
+                if (validNoArgs)
+                    args = [];
+                else {
+                    // Parse any arguments and clean them
+                    args = cmdString.substring((command + ' ').length).split('"').filter(e => !!e);
+                }
+
+                console.log(`'${command}' '${args}'`);
+
+                cmd.execute(msg, args)
+                    .catch(error => {
+                        console.error(error);
+                        return msg.channel.send('There was an error trying to execute that command!');
+                    });
+            }
+        }
+
+        // Let user know if they typed an unknown command
+        if (!foundMatch)
+            await msg.channel.send('I do not understand that command. Try `start server` if you want to start up the server');
+    }
+}
+
 // Add commands to bot
-bot.commands = new Discord.Collection();
-Object.keys(BOT_CMDS).map(key => {
-    bot.commands.set(BOT_CMDS[key].name, BOT_CMDS[key]);
-});
+const cmder = new BotCommander();
+cmder.addCommands(Object.values(BOT_CMDS));
 
 async function updateBotStatus(newFullStatus) {
     if (!Konsole.isReady() || Konsole.isInMaintainance())
@@ -267,32 +342,7 @@ bot.on('message', async msg => {
             return;
 
         console.info(`${isAdminUser ? 'Admin' : 'User'} '${msg.author.tag}' attempted to send command '${command}'`);
-
-        // Let user know if they typed an unknown command
-        if (!bot.commands.has(command)) {
-            await msg.channel.send('I do not understand that command. Try `start server` if you want to start up the server');
-            return;
-        }
-
-        const cmd = bot.commands.get(command);
-
-        // Only admins should be able to run admin-only commands (duh!)
-        if (cmd.adminOnly && !isAdminUser) {
-            await msg.channel.send('This command is for admins only!');
-            return;
-        }
-
-        // Can't let anyone run bot commands when in maintainance mode
-        if (Konsole.isInMaintainance() && !isAdminUser) {
-            await msg.channel.send('**ALERT**: Bot is in maintainance mode and will ignore you unless told otherwise by the server admins!');
-            return;
-        }
-
-        cmd.execute(msg)
-            .catch(error => {
-                console.error(error);
-                return msg.channel.send('There was an error trying to execute that command!');
-            });
+        await cmder.parseAndExecute(msg);
     }
 });
 
