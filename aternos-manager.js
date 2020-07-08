@@ -339,7 +339,12 @@ class AternosManager extends StatusTrackerMap {
         return { quotaUsage, backupFiles };
     }
 
-    async createBackup(backupName, { onStart = function () {}, onFinish = function () {}, onFail = function () {} } = {}) {
+    async createBackup(backupName, {
+        onRequestStart = function () {},
+        onStart = function () {},
+        onFinish = function () {},
+        onFail = function () {}
+    } = {}) {
         if (backupName.length > 100) {
             await onFail('Backup name specified is longer than 100 characters!')
             return;
@@ -354,14 +359,33 @@ class AternosManager extends StatusTrackerMap {
 
         await this.backupPage.type('#backup-create-input', backupName);
 
-        await onStart();
+        await this.backupPage.click('#backup-create-btn');
+        await onRequestStart();
 
-        await Promise.all([
-            this.backupPage.click('#backup-create-btn'),
-            this.backupPage.waitForNavigation({ waitUntil: ['domcontentloaded'], timeout: 60000 }),
-        ]);
+        const cdp = await this.backupPage.target().createCDPSession();
+        await cdp.send('Network.enable');
+        await cdp.send('Page.enable');
 
-        await onFinish();
+        let startedBackup = false;
+        async function processBackupProgress(wsPayload) {
+            const { type, message: msgStr } = JSON.parse(wsPayload.response.payloadData);
+            const msg = JSON.parse(msgStr);
+
+            if (type == "backup_progress") {
+                if (startedBackup === false) {
+                    startedBackup = true;
+                    await onStart();
+                }
+
+                if (msg.done === true) {
+                    cdp.off('Network.webSocketFrameReceived', processBackupProgress);
+                    await cdp.detach();
+                    await onFinish();
+                }
+            }
+        };
+
+        cdp.on('Network.webSocketFrameReceived', processBackupProgress);
     }
 
     async _deleteBackupByIndex(backupIndex, { onStart = function () {}, onFinish = function () {} } = {}) {
