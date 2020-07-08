@@ -368,9 +368,18 @@ async function updateBotStatus(newFullStatus) {
     } else if (serverStatus == AternosStatus.OFFLINE) {
         discordStatus = 'Offline';
         outputMsg = 'The server is offline!';
-    } else if ([AternosStatus.STARTING, AternosStatus.PREPARING, AternosStatus.LOADING].includes(serverStatus)) {
+    } else if (serverStatus == AternosStatus.PREPARING) {
+        discordStatus = 'Preparing...';
+        outputMsg = 'The server is preparing...';
+    } else if (serverStatus == AternosStatus.LOADING) {
+        discordStatus = 'Loading...';
+        outputMsg = 'The server is loading...';
+    } else if (serverStatus == AternosStatus.STARTING) {
         discordStatus = 'Starting up...';
         outputMsg = 'The server is starting up...';
+    } else if (serverStatus == AternosStatus.RESTARTING) {
+        discordStatus = 'Restarting...';
+        outputMsg = 'The server is restarting...';
     } else if (serverStatus == AternosStatus.IN_QUEUE) {
         discordStatus = `In queue: ${queuePos}`;
         outputMsg = `The server is in queue. ETA is ${queueEta.substring(4)} and we're in position ${queuePos}`;
