@@ -22,4 +22,4 @@ ATERNOS_PASS = example_pass_456
 
 ## Commands
 * `start server` - Starts the Aternos server up
-* `maintainance (on/off)` - Enables/Disables maintainance mode. Only the admin(s) can send commands to it when enabled.
+* `maintenance (on/off)` - Enables/Disables maintenance mode. Only the admin(s) can send commands to it when enabled.

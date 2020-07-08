@@ -106,5 +106,5 @@ dist
 # Config files
 *.ini
 
-# Maintainance lock file
-maintainance.lock
+# Maintenance lock file
+maintenance.lock

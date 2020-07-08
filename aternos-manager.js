@@ -18,7 +18,7 @@ const ATERNOS_BACKUP_URL        = 'https://aternos.org/backups/';
 const STATUS_UPDATE_INTERVAL = 2500;               // 2.5 seconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
 
-const MAINTAINANCE_LOCK_FILE = 'maintainance.lock';
+const MAINTENANCE_LOCK_FILE = 'maintenance.lock';
 
 const AternosStatus = {
     ONLINE:    'online',
@@ -67,11 +67,11 @@ class AternosManager extends StatusTrackerMap {
 
         this.addTracker('serverStatus', { allowed: AternosStatus });
         this.addTracker('fullServerStatus', { deep: true });
-        this.addTracker('maintainanceStatus', { allowed: [true, false] });
+        this.addTracker('maintenanceStatus', { allowed: [true, false] });
         this.addTracker('managerStatus', { allowed: ManagerStatus });
 
-        this.addHook('maintainanceStatus', async (onMaintainance) => {
-            await fs.promises.writeFile(MAINTAINANCE_LOCK_FILE, onMaintainance);
+        this.addHook('maintenanceStatus', async maintenance => {
+            await fs.promises.writeFile(MAINTENANCE_LOCK_FILE, maintenance);
         });
     }
 
@@ -90,10 +90,10 @@ class AternosManager extends StatusTrackerMap {
         await this.login(this.user, this.pass);
         await this.selectServerFromList();
 
-        if (fs.existsSync(MAINTAINANCE_LOCK_FILE)) {
-            const contents = await fs.promises.readFile(MAINTAINANCE_LOCK_FILE, 'utf-8');
-            this.toggleMaintainance(contents == 'true');
-            console.log(`Konsole: Starting in ${this.getStatus('maintainanceStatus') ? 'maintainance' : 'production'} mode!`);
+        if (fs.existsSync(MAINTENANCE_LOCK_FILE)) {
+            const contents = await fs.promises.readFile(MAINTENANCE_LOCK_FILE, 'utf-8');
+            this.toggleMaintenance(contents == 'true');
+            console.log(`Konsole: Starting in ${this.getStatus('maintenanceStatus') ? 'maintenance' : 'production'} mode!`);
         }
 
         // Call this once to ensure that we have a status reading of the server
@@ -197,12 +197,12 @@ class AternosManager extends StatusTrackerMap {
             throw new AternosException(errorMsg);
     }
 
-    toggleMaintainance(newVal) {
-        this.setStatus('maintainanceStatus', newVal);
+    toggleMaintenance(newVal) {
+        this.setStatus('maintenanceStatus', newVal);
     }
 
-    isInMaintainance() {
-        return !!this.getStatus('maintainanceStatus');
+    isInMaintenance() {
+        return !!this.getStatus('maintenanceStatus');
     }
 
     hasCrashed() {

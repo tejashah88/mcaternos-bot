@@ -30,8 +30,8 @@ const Konsole = new AternosManager({
     password: config.aternos.ATERNOS_PASS
 })
 
-async function onMaintainanceStatusUpdate(isMaintainanceEnabled) {
-    if (isMaintainanceEnabled) {
+async function onMaintenanceStatusUpdate(isMaintenanceEnabled) {
+    if (isMaintenanceEnabled) {
         await bot.user.setPresence({
             status: 'dnd',
             activity: {
@@ -70,7 +70,7 @@ async function onConsoleStatusUpdate(currStatus) {
         break;
 
         case ManagerStatus.STOPPING:
-            if (!Konsole.isInMaintainance())
+            if (!Konsole.isInMaintenance())
                 bot.user.setPresence({ status: 'invisible' });
         break;
     }
@@ -117,23 +117,23 @@ const BOT_CMDS = {
             }
         }
     },
-    MaintainanceOn: {
-        name: 'maintainance on',
-        description: 'Enables maintainance mode. Only the owner is able to send commands to the bot if maintainance is enabled.',
+    MaintenanceOn: {
+        name: 'maintenance on',
+        description: 'Enables maintenance mode. Only the owner is able to send commands to the bot if maintenance is enabled.',
         adminOnly: true,
         acceptsArgs: false,
         async execute(msg) {
-            await Konsole.toggleMaintainance(true);
+            await Konsole.toggleMaintenance(true);
             await msg.channel.send('Bot will not listen to anyone except for admins!');
         }
     },
-    MaintainanceOff: {
-        name: 'maintainance off',
-        description: 'Disables maintainance mode. Everyone with access to the bot can send commands if maintainance is disabled.',
+    MaintenanceOff: {
+        name: 'maintenance off',
+        description: 'Disables maintenance mode. Everyone with access to the bot can send commands if maintenance is disabled.',
         adminOnly: true,
         acceptsArgs: false,
         async execute(msg) {
-            await Konsole.toggleMaintainance(false);
+            await Konsole.toggleMaintenance(false);
             await msg.channel.send('Bot is now all ears to everyone!');
         }
     },
@@ -252,9 +252,9 @@ class BotCommander {
                     return;
                 }
 
-                // Can't let anyone run bot commands when in maintainance mode
-                if (Konsole.isInMaintainance() && !isAdminUser) {
-                    await msg.channel.send('**ALERT**: Bot is in maintainance mode and will ignore you unless told otherwise by the server admins!');
+                // Can't let anyone run bot commands when in maintenance mode
+                if (Konsole.isInMaintenance() && !isAdminUser) {
+                    await msg.channel.send('**ALERT**: Bot is in maintenance mode and will ignore you unless told otherwise by the server admins!');
                     return;
                 }
 
@@ -289,7 +289,7 @@ const cmder = new BotCommander();
 cmder.addCommands(Object.values(BOT_CMDS));
 
 async function updateBotStatus(newFullStatus) {
-    if (!Konsole.isReady() || Konsole.isInMaintainance())
+    if (!Konsole.isReady() || Konsole.isInMaintenance())
         return;
 
     const { serverStatus, playersOnline, queueEta, queuePos } = newFullStatus;
@@ -399,8 +399,8 @@ bot.on('message', async msg => {
         // Attach listener for triggering backups when server becomes offline
         Konsole.addHook('serverStatus', handleBackupGeneration);
 
-        // Attach listener for maintainance status update
-        Konsole.addHook('maintainanceStatus', onMaintainanceStatusUpdate)
+        // Attach listener for maintenance status update
+        Konsole.addHook('maintenanceStatus', onMaintenanceStatusUpdate)
 
         // Attach listener for manager status update
         Konsole.addHook('managerStatus', onConsoleStatusUpdate);
