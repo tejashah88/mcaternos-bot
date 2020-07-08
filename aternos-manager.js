@@ -342,7 +342,7 @@ class AternosManager extends StatusTrackerMap {
 
         await Promise.all([
             this.backupPage.click('#backup-create-btn'),
-            this.backupPage.waitForNavigation(),
+            this.backupPage.waitForNavigation({ waitUntil: ['domcontentloaded'], timeout: 60000 }),
         ]);
 
         await onFinish();
@@ -357,7 +357,7 @@ class AternosManager extends StatusTrackerMap {
 
         await Promise.all([
             await this.backupPage.click('.btn-green'),
-            this.backupPage.waitForNavigation()
+            this.backupPage.waitForNavigation({ waitUntil: ['domcontentloaded'], timeout: 60000 })
         ]);
 
         await onFinish();
