@@ -21,7 +21,7 @@ const prettyMS = require('pretty-ms');
 const roundTo = require('round-to');
 const prettyBytes = require('pretty-bytes');
 
-const { AternosManager, AternosStatus, AternosException, ManagerStatus } = require('./aternos-manager');
+const { AternosManager, AternosException, AternosStatus, ManagerStatus, ServerActions } = require('./aternos-manager');
 
 // Totally not a KDE reference :P
 const Konsole = new AternosManager({
@@ -111,9 +111,65 @@ const BOT_CMDS = {
                 Konsole.addHook('serverStatus', onDetectOnline);
                 Konsole.addHook('serverStatus', onFailToEscapeQueue);
 
-                await Konsole.requestStartServer();
+                await Konsole.requestServerAction(ServerActions.START);
             } else {
-                await msg.channel.send(`Server is not offline! It is ${Konsole.getStatus('serverStatus')}`);
+                await msg.channel.send(`Server is not offline! It is ${Konsole.getStatus('serverStatus')}.`);
+            }
+        }
+    },
+    StopServer: {
+        name: 'stop server',
+        description: 'Stops the Aternos server.',
+        adminOnly: true,
+        acceptsArgs: false,
+        async execute(msg) {
+            if (Konsole.getStatus('serverStatus') == AternosStatus.ONLINE) {
+                await msg.channel.send('Stopping the server...');
+
+                async function onDetectOffline(newStatus) {
+                    if (newStatus == AternosStatus.OFFLINE) {
+                        await msg.channel.send('Server is offline!');
+                        Konsole.removeHook('serverStatus', onDetectOffline);
+                    }
+                }
+
+                Konsole.addHook('serverStatus', onDetectOffline);
+
+                await Konsole.requestServerAction(ServerActions.STOP);
+            } else {
+                await msg.channel.send(`Server is not online! It is ${Konsole.getStatus('serverStatus')}.`);
+            }
+        }
+    },
+    RestartServer: {
+        name: 'restart server',
+        description: 'Restarts the Aternos server.',
+        adminOnly: true,
+        acceptsArgs: false,
+        async execute(msg) {
+            if (Konsole.getStatus('serverStatus') == AternosStatus.ONLINE) {
+                await msg.channel.send('Restarting the server...');
+
+                // NOTE/HACK: Apparently the EventEmitter seems to force a first call on the hook,
+                // which causes the bot to immediately respond with 'Server is online!'
+                // This is because the server status isn't immediately updated when the restart button is pressed.
+                let firstTrigger = true;
+                async function onDetectOnline(newStatus) {
+                    if (newStatus == AternosStatus.ONLINE) {
+                        if (firstTrigger)
+                            firstTrigger = false;
+                        else {
+                            await msg.channel.send('Server is online!');
+                            Konsole.removeHook('serverStatus', onDetectOnline);
+                        }
+                    }
+                }
+
+                Konsole.addHook('serverStatus', onDetectOnline);
+
+                await Konsole.requestServerAction(ServerActions.RESTART);
+            } else {
+                await msg.channel.send(`Server is not online! It is ${Konsole.getStatus('serverStatus')}.`);
             }
         }
     },
@@ -190,8 +246,12 @@ const BOT_CMDS = {
         async execute(msg, args) {
             const backupName = args[0];
             await Konsole.createBackup(backupName, {
-                onStart: async () => await msg.channel.send(`Backing up the universe under the name of '${backupName}' as we speak...`),
-                onFinish: async () => await msg.channel.send('The backup has finished!'),
+                onRequestStart: async () => await msg.channel.send(`Requested to create backup of the universe with the name of '${backupName}'!`),
+                onStart: async () => await msg.channel.send(`Creating backup of the universe as we speak...`),
+                onFinish: async () => {
+                    await msg.channel.send('The backup has finished!');
+                    await BOT_CMDS.ListBackups.execute(msg);
+                },
                 onFail: async errMsg => await msg.channel.send(`**Warning**: ${errMsg}`),
             });
         }
@@ -205,7 +265,10 @@ const BOT_CMDS = {
             const backupName = args[0];
             await Konsole.deleteBackup(backupName, {
                 onStart: async () => await msg.channel.send(`Deleting backup of the universe under the name of '${backupName}' as we speak...`),
-                onFinish: async () => await msg.channel.send('The backup deletion has finished!'),
+                onFinish: async () => {
+                    await msg.channel.send('The backup deletion has finished!');
+                    await BOT_CMDS.ListBackups.execute(msg);
+                },
                 onFail: async errMsg => await msg.channel.send(`**Warning**: ${errMsg}`),
             });
         }
@@ -267,8 +330,6 @@ class BotCommander {
                     // Parse any arguments and clean them
                     args = cmdString.substring((command + ' ').length).split('"').filter(e => !!e);
                 }
-
-                console.log(`'${command}' '${args}'`);
 
                 cmd.execute(msg, args)
                     .catch(error => {

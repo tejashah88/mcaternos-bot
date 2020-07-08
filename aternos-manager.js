@@ -21,23 +21,30 @@ const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
 const MAINTENANCE_LOCK_FILE = 'maintenance.lock';
 
 const AternosStatus = {
-    ONLINE:    'online',
-    OFFLINE:   'offline',
-    STARTING:  'starting ...',
-    LOADING:   'loading ...',
-    PREPARING: 'preparing ...',
-    IN_QUEUE:  'waiting in queue',
-    SAVING:    'saving ...',
-    STOPPING:  'stopping ...',
-    CRASHED:   'crashed'
-}
+    ONLINE:     'online',
+    OFFLINE:    'offline',
+    STARTING:   'starting ...',
+    LOADING:    'loading ...',
+    PREPARING:  'preparing ...',
+    IN_QUEUE:   'waiting in queue',
+    SAVING:     'saving ...',
+    STOPPING:   'stopping ...',
+    CRASHED:    'crashed',
+    RESTARTING: 'restarting ...',
+};
 
 const ManagerStatus = {
     INITIALIZING: 1,
     READY:        2,
     RESTARTING:   4,
     STOPPING:     8,
-}
+};
+
+const ServerActions = {
+    START:   1,
+    STOP:    2,
+    RESTART: 4,
+};
 
 // Source: https://gist.github.com/slavafomin/b164e3e710a6fc9352c934b9073e7216
 class AternosException extends Error {
@@ -90,12 +97,6 @@ class AternosManager extends StatusTrackerMap {
         await this.login(this.user, this.pass);
         await this.selectServerFromList();
 
-        if (fs.existsSync(MAINTENANCE_LOCK_FILE)) {
-            const contents = await fs.promises.readFile(MAINTENANCE_LOCK_FILE, 'utf-8');
-            this.toggleMaintenance(contents == 'true');
-            console.log(`Konsole: Starting in ${this.getStatus('maintenanceStatus') ? 'maintenance' : 'production'} mode!`);
-        }
-
         // Call this once to ensure that we have a status reading of the server
         await this.checkStatus(true);
 
@@ -110,6 +111,13 @@ class AternosManager extends StatusTrackerMap {
             await this.checkStatus();
             await this.checkMemoryUsage();
         }, STATUS_UPDATE_INTERVAL);
+
+        // Set maintenance mode
+        if (fs.existsSync(MAINTENANCE_LOCK_FILE)) {
+            const contents = await fs.promises.readFile(MAINTENANCE_LOCK_FILE, 'utf-8');
+            this.toggleMaintenance(contents == 'true');
+            console.log(`Konsole: Starting in ${this.getStatus('maintenanceStatus') ? 'maintenance' : 'production'} mode!`);
+        }
 
         this.setStatus('managerStatus', ManagerStatus.READY);
     }
@@ -288,22 +296,30 @@ class AternosManager extends StatusTrackerMap {
         console.log(`Konsole: Successfully changed server IP to ${this.url}!`);
     }
 
-    requestStartServer() {
-        let that = this;
+    requestServerAction(serverAction) {
+        const that = this;
 
-        async function attemptStartServer(currInternalStatus) {
+        const action2Id = {
+            [ServerActions.START]:   '#start',
+            [ServerActions.STOP]:    '#stop',
+            [ServerActions.RESTART]: '#restart',
+        };
+
+        async function attemptServerAction(managerStatus) {
             // This is for the edge case when the user is requesting to start the server when the bot isn't ready
             if (that.isReady()) {
-                await that.console.click('#start');
-                that.removeHook('managerStatus', attemptStartServer);
+                await that.console.click(action2Id[serverAction]);
+                that.removeHook('managerStatus', attemptServerAction);
 
-                // Hide notifications alert after 1 second
-                await delay(1000);
-                await that.console.evaluate(() => hideAlert());
+                if (serverAction == ServerActions.START) {
+                    // Hide notifications alert after 1 second
+                    await delay(1000);
+                    await that.console.evaluate(() => hideAlert());
+                }
             }
         }
 
-        this.addHook('managerStatus', attemptStartServer);
+        this.addHook('managerStatus', attemptServerAction);
         this.forceStatusUpdate('managerStatus');
     }
 
@@ -383,4 +399,4 @@ class AternosManager extends StatusTrackerMap {
     }
 }
 
-module.exports = { AternosManager, AternosStatus, AternosException, ManagerStatus };
+module.exports = { AternosManager, AternosException, AternosStatus, ManagerStatus, ServerActions };
