@@ -356,43 +356,74 @@ async function updateBotStatus(newFullStatus) {
     const { serverStatus, playersOnline, queueEta, queuePos } = newFullStatus;
     let outputMsg, discordStatus;
 
-    if (serverStatus == AternosStatus.ONLINE) {
-        const reservedSpots = parseInt(playersOnline.split('/')[0]);
-        if (reservedSpots === 0) {
-            discordStatus = `Online: ${playersOnline} - ${queueEta}`;
-            outputMsg = `The server is online with ${playersOnline} players and ${queueEta} left!`;
-        } else {
-            discordStatus = `Online: ${playersOnline}`;
-            outputMsg = `The server is online with ${playersOnline} players!`;
+    switch (serverStatus) {
+        case AternosStatus.ONLINE: {
+            const reservedSpots = parseInt(playersOnline.split('/')[0]);
+            if (reservedSpots === 0) {
+                discordStatus = `Online: ${playersOnline} - ${queueEta}`;
+                outputMsg = `The server is online with ${playersOnline} players and ${queueEta} left!`;
+            } else {
+                discordStatus = `Online: ${playersOnline}`;
+                outputMsg = `The server is online with ${playersOnline} players!`;
+            }
+
+            break;
         }
-    } else if (serverStatus == AternosStatus.OFFLINE) {
-        discordStatus = 'Offline';
-        outputMsg = 'The server is offline!';
-    } else if (serverStatus == AternosStatus.PREPARING) {
-        discordStatus = 'Preparing...';
-        outputMsg = 'The server is preparing...';
-    } else if (serverStatus == AternosStatus.LOADING) {
-        discordStatus = 'Loading...';
-        outputMsg = 'The server is loading...';
-    } else if (serverStatus == AternosStatus.STARTING) {
-        discordStatus = 'Starting up...';
-        outputMsg = 'The server is starting up...';
-    } else if (serverStatus == AternosStatus.RESTARTING) {
-        discordStatus = 'Restarting...';
-        outputMsg = 'The server is restarting...';
-    } else if (serverStatus == AternosStatus.IN_QUEUE) {
-        discordStatus = `In queue: ${queuePos}`;
-        outputMsg = `The server is in queue. ETA is ${queueEta.substring(4)} and we're in position ${queuePos}`;
-        await Konsole.clickConfirmNowIfNeeded();
-    } else if ([AternosStatus.SAVING, AternosStatus.STOPPING].includes(serverStatus)) {
-        discordStatus = 'Shutting down...';
-        outputMsg = 'The server is shutting down...';
-    } else if (serverStatus == AternosStatus.CRASHED) {
-        discordStatus = 'Crashed!';
-        outputMsg = 'The server has crashed! The admin must resolve this in order for the bot to receive commands.';
-    } else {
-        discordStatus = serverStatus;
-        console.warn(`WARNING: Unknown status: '${serverStatus}'`);
+
+        case AternosStatus.OFFLINE: {
+            discordStatus = 'Offline';
+            outputMsg = 'The server is offline!';
+            break;
+        }
+
+        case AternosStatus.PREPARING:
+        case AternosStatus.LOADING: {
+            discordStatus = 'Preparing...';
+            outputMsg = 'The server is preparing...';
+            break;
+        }
+
+        case AternosStatus.STARTING: {
+            discordStatus = 'Starting up...';
+            outputMsg = 'The server is starting up...';
+            break;
+        }
+
+        case AternosStatus.RESTARTING: {
+            discordStatus = 'Restarting...';
+            outputMsg = 'The server is restarting...';
+            break;
+        }
+
+        case AternosStatus.IN_QUEUE: {
+            discordStatus = `In queue: ${queuePos}`;
+            outputMsg = `The server is in queue. ETA is ${queueEta.substring(4)} and we're in position ${queuePos}`;
+            await Konsole.clickConfirmNowIfNeeded();
+            break;
+        }
+
+        case AternosStatus.STOPPING: {
+            discordStatus = 'Shutting down...';
+            outputMsg = 'The server is shutting down...';
+            break;
+        }
+
+        case AternosStatus.SAVING: {
+            discordStatus = 'Saving...';
+            outputMsg = 'The server is saving data...';
+            break;
+        }
+
+        case AternosStatus.CRASHED: {
+            discordStatus = 'Crashed!';
+            outputMsg = 'The server has crashed! The admin must resolve this in order for the bot to receive commands.';
+            break;
+        }
+
+        default: {
+            discordStatus = serverStatus;
+            console.warn(`WARNING: Unknown status: '${serverStatus}'`);
+        }
     }
     
     await bot.user.setPresence({
