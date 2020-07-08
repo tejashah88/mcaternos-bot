@@ -15,7 +15,7 @@ const ATERNOS_SERVER_SELECT_URL = 'https://aternos.org/servers/';
 const ATERNOS_CONSOLE_URL       = 'https://aternos.org/server/';
 const ATERNOS_BACKUP_URL        = 'https://aternos.org/backups/';
 
-const STATUS_UPDATE_INTERVAL = 2500;               // 2.5 seconds
+const STATUS_UPDATE_INTERVAL = 5000;               // 5 seconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
 
 const MAINTENANCE_LOCK_FILE = 'maintenance.lock';
