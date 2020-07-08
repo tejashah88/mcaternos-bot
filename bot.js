@@ -2,6 +2,9 @@
 
 'use strict'
 
+// Used to make DateTime generation timezone-consistent
+process.env.TZ = 'America/Los_Angeles';
+
 require('make-promises-safe');
 
 // Initialize libraries and variables
