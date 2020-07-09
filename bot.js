@@ -98,6 +98,16 @@ const BOT_CMDS = {
                     if (newStatus == AternosStatus.ONLINE) {
                         await msg.channel.send('Server is online!');
                         Konsole.removeHook('serverStatus', onDetectOnline);
+                        Konsole.removeHook('serverStatus', onDetectCrashed);
+                        Konsole.removeHook('serverStatus', onFailToEscapeQueue);
+                    }
+                }
+
+                async function onDetectCrashed(newStatus) {
+                    if (newStatus == AternosStatus.CRASHED) {
+                        await msg.channel.send('**WARNING**: Server has crashed! You must wait for the admins to restart the server.');
+                        Konsole.removeHook('serverStatus', onDetectOnline);
+                        Konsole.removeHook('serverStatus', onDetectCrashed);
                         Konsole.removeHook('serverStatus', onFailToEscapeQueue);
                     }
                 }
@@ -107,11 +117,13 @@ const BOT_CMDS = {
                         await msg.channel.send('Something went wrong when trying to escape the queue. Maybe an AD is in the way?');
                         await Konsole.console.screenshot({ path: `fail-queue-${+new Date()}.png`});
                         Konsole.removeHook('serverStatus', onDetectOnline);
+                        Konsole.removeHook('serverStatus', onDetectCrashed);
                         Konsole.removeHook('serverStatus', onFailToEscapeQueue);
                     }
                 }
 
                 Konsole.addHook('serverStatus', onDetectOnline);
+                Konsole.addHook('serverStatus', onDetectCrashed);
                 Konsole.addHook('serverStatus', onFailToEscapeQueue);
 
                 await Konsole.requestServerAction(ServerActions.START);
