@@ -145,6 +145,13 @@ class StatusTrackerMap {
         else
             throw Exception(`Tracker for '${eventName}' does not exist!`);
     }
+
+    waitForStatusLogic(eventName, checkPredicate, timeout) {
+        if (this.trackers.hasOwnProperty(eventName))
+            return this.trackers[eventName].waitForStatusLogic(checkPredicate, timeout);
+        else
+            throw Exception(`Tracker for '${eventName}' does not exist!`);
+    }
 }
 
 module.exports = { StatusTracker, StatusTrackerMap };

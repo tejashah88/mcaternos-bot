@@ -307,7 +307,8 @@ class AternosManager extends StatusTrackerMap {
         await this.console.evaluate(() => hideAlert());
         
         // Wait until we know for sure that the server is indeed starting up before letting go
-        await this.getStatus('serverStatus').waitForStatusLogic(
+        await this.waitForStatusLogic(
+            'serverStatus',
             newStatus => ![AternosStatus.OFFLINE, AternosStatus.CRASHED].includes(newStatus),
             DEFAULT_STATUS_LOGIC_WAIT
         );
@@ -317,7 +318,8 @@ class AternosManager extends StatusTrackerMap {
         await this.console.click('#stop');
         
         // Wait until we know for sure that the server is indeed shutting down before letting go
-        await this.getStatus('serverStatus').waitForStatusLogic(
+        await this.waitForStatusLogic(
+            'serverStatus',
             newStatus => newStatus != AternosStatus.OFFLINE,
             DEFAULT_STATUS_LOGIC_WAIT
         );
@@ -327,7 +329,8 @@ class AternosManager extends StatusTrackerMap {
         await this.console.click('#restart');
         
         // Wait until we know for sure that the server is indeed shutting down before letting go
-        await this.getStatus('serverStatus').waitForStatusLogic(
+        await this.waitForStatusLogic(
+            'serverStatus',
             newStatus => newStatus != AternosStatus.ONLINE,
             DEFAULT_STATUS_LOGIC_WAIT
         );
@@ -408,11 +411,12 @@ class AternosManager extends StatusTrackerMap {
         await this.backupPage.click('.btn-green');
         await onStart();
 
+        const that = this;
         async function detectBackupDeletionFinish(res) {
             if (res.url().includes('delete.php')) {
-                if (res.status() >= 200 && res.status() < 300) {
+                if (res.ok()) {
                     try {
-                        const body = res.json();
+                        const body = await res.json();
 
                         if (body.success)
                             await onFinish();
@@ -424,7 +428,7 @@ class AternosManager extends StatusTrackerMap {
                 } else
                     await onFail('Backup deletion failed! Check if Aternos is still online and functioning?');
 
-                this.backupPage.off('response', detectBackupDeletionFinish);
+                that.backupPage.off('response', detectBackupDeletionFinish);
             }
         }
 
