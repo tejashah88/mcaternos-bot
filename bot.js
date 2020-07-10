@@ -493,11 +493,14 @@ async function handleBackupGeneration(newStatus, oldStatus, forceUpdate) {
         const dateOfBackup = new Date().toLocaleString().split(',')[0]; // Just the date in MM/DD/YYYY
         const dateHash = parseInt(+new Date / 1000).toString(16);       // A base-16 time-based hash based on number of seconds since start of epoch
         await Konsole.createBackup(`Automatic backup @ ${dateOfBackup} - ${dateHash}`);
+        
         const numBackups = (await Konsole.listBackups()).backupFiles.length;
+        const BACKUP_FILES_LIMIT = parseInt(config.aternos.BACKUP_LIMIT);
 
-        if (numBackups > parseInt(config.aternos.BACKUP_LIMIT)) {
-            console.log('Konsole: Deleting oldest backup to maintain backup limit...');
+        console.log('Konsole: Deleting oldest backup(s) to maintain backup limit...');
+        while (numBackups > BACKUP_FILES_LIMIT) {
             await Konsole.deleteOldestBackup();
+            numBackups = (await Konsole.listBackups()).backupFiles.length;
         }
     }
 }
