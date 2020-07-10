@@ -92,8 +92,6 @@ const BOT_CMDS = {
             if (Konsole.hasCrashed() && !isAdminUser) {
                 await msg.channel.send('The server has crashed! Please wait while a server admin resolves the issue.')
             } else if ([AternosStatus.OFFLINE, AternosStatus.CRASHED].includes(Konsole.getStatus('serverStatus'))) {
-                await msg.channel.send('Starting the server...');
-
                 async function onDetectOnlineOrCrashed(newStatus) {
                     if (newStatus == AternosStatus.ONLINE || newStatus == AternosStatus.CRASHED) {
                         if (newStatus == AternosStatus.ONLINE)
@@ -115,10 +113,11 @@ const BOT_CMDS = {
                     }
                 }
 
+                await Konsole.startServer();
+                await msg.channel.send('Starting the server...');
+
                 Konsole.addHook('serverStatus', onDetectOnlineOrCrashed);
                 Konsole.addHook('serverStatus', onFailToEscapeQueue);
-
-                await Konsole.requestServerAction(ServerActions.START);
             } else {
                 await msg.channel.send(`Server is not offline! It is ${Konsole.getStatus('serverStatus')}.`);
             }
@@ -131,8 +130,6 @@ const BOT_CMDS = {
         acceptsArgs: false,
         async execute(msg) {
             if (Konsole.getStatus('serverStatus') == AternosStatus.ONLINE) {
-                await msg.channel.send('Stopping the server...');
-
                 async function onDetectOfflineOrCrashed(newStatus) {
                     if (newStatus == AternosStatus.OFFLINE || newStatus == AternosStatus.CRASHED) {
                         if (newStatus == AternosStatus.OFFLINE)
@@ -144,9 +141,10 @@ const BOT_CMDS = {
                     }
                 }
 
-                Konsole.addHook('serverStatus', onDetectOfflineOrCrashed);
+                await Konsole.stopServer();
+                await msg.channel.send('Stopping the server...');
 
-                await Konsole.requestServerAction(ServerActions.STOP);
+                Konsole.addHook('serverStatus', onDetectOfflineOrCrashed);
             } else {
                 await msg.channel.send(`Server is not online! It is ${Konsole.getStatus('serverStatus')}.`);
             }
@@ -159,29 +157,20 @@ const BOT_CMDS = {
         acceptsArgs: false,
         async execute(msg) {
             if (Konsole.getStatus('serverStatus') == AternosStatus.ONLINE) {
-                await msg.channel.send('Restarting the server...');
-
-                // NOTE/HACK: Apparently the EventEmitter seems to force a first call on the hook,
-                // which causes the bot to immediately respond with 'Server is online!'
-                // This is because the server status isn't immediately updated when the restart button is pressed.
-                let firstTrigger = true;
                 async function onDetectOnlineOrCrashed(newStatus) {
                     if (newStatus == AternosStatus.ONLINE) {
-                        if (firstTrigger)
-                            firstTrigger = false;
-                        else {
-                            await msg.channel.send('Server is online!');
-                            Konsole.removeHook('serverStatus', onDetectOnlineOrCrashed);
-                        }
+                        await msg.channel.send('Server is online!');
+                        Konsole.removeHook('serverStatus', onDetectOnlineOrCrashed);
                     } else if (newStatus == AternosStatus.CRASHED) {
                         await msg.channel.send('**WARNING**: Server has crashed! You must wait for the admins to restart the server.');
                         Konsole.removeHook('serverStatus', onDetectOnlineOrCrashed);
                     }
                 }
 
+                await Konsole.restartServer();
+                await msg.channel.send('Restarting the server...');
+                
                 Konsole.addHook('serverStatus', onDetectOnlineOrCrashed);
-
-                await Konsole.requestServerAction(ServerActions.RESTART);
             } else {
                 await msg.channel.send(`Server is not online! It is ${Konsole.getStatus('serverStatus')}.`);
             }

@@ -56,6 +56,30 @@ class StatusTracker extends EventEmitter {
     removeAllHooks() {
         this.removeAllListeners(this.eventName);
     }
+
+    waitForStatusLogic(checkPredicate, timeout) {
+        const that = this;
+
+        if (timeout <= 0)
+            throw new Error('Timeout length must be a positive non-zero number in milliseconds!');
+
+        return new Promise((resolve, reject) => {
+            const oldDate = +new Date();
+
+            function statusScanner(newStatus) {
+                const newDate = +new Date();
+                if (checkPredicate(newStatus)) {
+                    resolve();
+                    that.removeHook(statusScanner);
+                } else if ((newDate - oldDate) > timeout) {
+                    reject(`Timeout exceeded specified limit for status tracker '${this.eventName}'!`);
+                    that.removeHook(statusScanner);
+                }
+            }
+
+            this.addHook(statusScanner);
+        });
+    }
 }
 
 class StatusTrackerMap {

@@ -17,6 +17,7 @@ const ATERNOS_BACKUP_URL        = 'https://aternos.org/backups/';
 
 const STATUS_UPDATE_INTERVAL = 5000;               // 5 seconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
+const DEFAULT_STATUS_LOGIC_WAIT = 30000;           // 30 seconds
 
 const MAINTENANCE_LOCK_FILE = 'maintenance.lock';
 
@@ -297,31 +298,39 @@ class AternosManager extends StatusTrackerMap {
         console.log(`Konsole: Successfully changed server IP to ${this.url}!`);
     }
 
-    requestServerAction(serverAction) {
-        const that = this;
+    async startServer() {
+        await this.console.click('#start');
 
-        const action2Id = {
-            [ServerActions.START]:   '#start',
-            [ServerActions.STOP]:    '#stop',
-            [ServerActions.RESTART]: '#restart',
-        };
+        // The notifications alert will pop up whenever the server starting is in queue and it'll prevent
+        // the bot from confirming the starting process, so it'll try to close it
+        await delay(1000);
+        await that.console.evaluate(() => hideAlert());
+        
+        // Wait until we know for sure that the server is indeed starting up before letting go
+        await this.getStatus('serverStatus').waitForStatusLogic(
+            newStatus => ![AternosStatus.OFFLINE, AternosStatus.CRASHED].includes(newStatus),
+            DEFAULT_STATUS_LOGIC_WAIT
+        );
+    }
 
-        async function attemptServerAction(managerStatus) {
-            // This is for the edge case when the user is requesting to start the server when the bot isn't ready
-            if (that.isReady()) {
-                await that.console.click(action2Id[serverAction]);
-                that.removeHook('managerStatus', attemptServerAction);
+    async stopServer() {
+        await this.console.click('#stop');
+        
+        // Wait until we know for sure that the server is indeed shutting down before letting go
+        await this.getStatus('serverStatus').waitForStatusLogic(
+            newStatus => newStatus != AternosStatus.OFFLINE,
+            DEFAULT_STATUS_LOGIC_WAIT
+        );
+    }
 
-                if (serverAction == ServerActions.START) {
-                    // Hide notifications alert after 1 second
-                    await delay(1000);
-                    await that.console.evaluate(() => hideAlert());
-                }
-            }
-        }
-
-        this.addHook('managerStatus', attemptServerAction);
-        this.forceStatusUpdate('managerStatus');
+    async restartServer() {
+        await this.console.click('#restart');
+        
+        // Wait until we know for sure that the server is indeed shutting down before letting go
+        await this.getStatus('serverStatus').waitForStatusLogic(
+            newStatus => newStatus != AternosStatus.ONLINE,
+            DEFAULT_STATUS_LOGIC_WAIT
+        );
     }
 
     async listBackups() {
