@@ -392,7 +392,7 @@ class AternosManager extends StatusTrackerMap {
         await this.backupPage.waitForSelector('.backup-remove-btn');
         const allDeleteBtns = await this.backupPage.$$(`.backup-remove-btn`);
         await allDeleteBtns[backupIndex].click();
-        
+
         await onStart();
 
         await Promise.all([

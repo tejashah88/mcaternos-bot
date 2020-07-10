@@ -455,7 +455,10 @@ async function updateBotStatus(newFullStatus) {
 async function handleBackupGeneration(newStatus, oldStatus, forceUpdate) {
     if (newStatus == AternosStatus.OFFLINE && oldStatus != null && !forceUpdate) {
         console.log('Konsole: Creating backup now that server is offline...');
-        await Konsole.createBackup(`Automatic backup @ ${new Date().toLocaleString().split(',')[0]}`);
+
+        const dateOfBackup = new Date().toLocaleString().split(',')[0]; // Just the date in MM/DD/YYYY
+        const dateHash = parseInt(+new Date / 1000).toString(16);       // A base-16 time-based hash based on number of seconds since start of epoch
+        await Konsole.createBackup(`Automatic backup @ ${dateOfBackup} - ${dateHash}`);
         const numBackups = (await Konsole.listBackups()).backupFiles.length;
 
         if (numBackups > parseInt(config.aternos.BACKUP_LIMIT)) {
