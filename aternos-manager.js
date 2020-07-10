@@ -400,19 +400,35 @@ class AternosManager extends StatusTrackerMap {
         cdp.on('Network.webSocketFrameReceived', processBackupProgress);
     }
 
-    async _deleteBackupByIndex(backupIndex, { onStart = function () {}, onFinish = function () {} } = {}) {
+    async _deleteBackupByIndex(backupIndex, { onStart = function () {}, onFinish = function () {}, onFail = function () {} } = {}) {
         await this.backupPage.waitForSelector('.backup-remove-btn');
         const allDeleteBtns = await this.backupPage.$$(`.backup-remove-btn`);
         await allDeleteBtns[backupIndex].click();
 
+        await this.backupPage.click('.btn-green');
         await onStart();
 
-        await Promise.all([
-            await this.backupPage.click('.btn-green'),
-            this.backupPage.waitForNavigation({ waitUntil: ['domcontentloaded'], timeout: 60000 })
-        ]);
+        async function detectBackupDeletionFinish(res) {
+            if (res.url().includes('delete.php')) {
+                if (res.status() >= 200 && res.status() < 300) {
+                    try {
+                        const body = res.json();
 
-        await onFinish();
+                        if (body.success)
+                            await onFinish();
+                        else
+                            await onFail(body.message);
+                    } catch (err) {
+                        await onFail('DEBUG: Unable to parse backup deletion status!');
+                    }
+                } else
+                    await onFail('Backup deletion failed! Check if Aternos is still online and functioning?');
+
+                this.backupPage.off('response', detectBackupDeletionFinish);
+            }
+        }
+
+        this.backupPage.on('response', detectBackupDeletionFinish);
     }
 
     async deleteBackup(backupName, { onStart = function () {}, onFinish = function () {}, onFail = function () {} } = {}) {
