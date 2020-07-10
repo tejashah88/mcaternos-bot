@@ -355,6 +355,7 @@ class AternosManager extends StatusTrackerMap {
         onFinish = function () {},
         onFail = function () {}
     } = {}) {
+        backupName = backupName.trim();
         if (backupName.length > 100) {
             await onFail('Backup name specified is longer than 100 characters!')
             return;
@@ -415,6 +416,7 @@ class AternosManager extends StatusTrackerMap {
     }
 
     async deleteBackup(backupName, { onStart = function () {}, onFinish = function () {}, onFail = function () {} } = {}) {
+        backupName = backupName.trim();
         const { backupFiles } = await this.listBackups();
         const backupIndex = backupFiles.findIndex(file => file.name == backupName);
 
