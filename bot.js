@@ -94,20 +94,14 @@ const BOT_CMDS = {
             } else if ([AternosStatus.OFFLINE, AternosStatus.CRASHED].includes(Konsole.getStatus('serverStatus'))) {
                 await msg.channel.send('Starting the server...');
 
-                async function onDetectOnline(newStatus) {
-                    if (newStatus == AternosStatus.ONLINE) {
-                        await msg.channel.send('Server is online!');
-                        Konsole.removeHook('serverStatus', onDetectOnline);
-                        Konsole.removeHook('serverStatus', onDetectCrashed);
-                        Konsole.removeHook('serverStatus', onFailToEscapeQueue);
-                    }
-                }
+                async function onDetectOnlineOrCrashed(newStatus) {
+                    if (newStatus == AternosStatus.ONLINE || newStatus == AternosStatus.CRASHED) {
+                        if (newStatus == AternosStatus.ONLINE)
+                            await msg.channel.send('Server is online!');
+                        else
+                            await msg.channel.send('**WARNING**: Server has crashed! You must wait for the admins to restart the server.');
 
-                async function onDetectCrashed(newStatus) {
-                    if (newStatus == AternosStatus.CRASHED) {
-                        await msg.channel.send('**WARNING**: Server has crashed! You must wait for the admins to restart the server.');
-                        Konsole.removeHook('serverStatus', onDetectOnline);
-                        Konsole.removeHook('serverStatus', onDetectCrashed);
+                        Konsole.removeHook('serverStatus', onDetectOnlineOrCrashed);
                         Konsole.removeHook('serverStatus', onFailToEscapeQueue);
                     }
                 }
@@ -116,14 +110,12 @@ const BOT_CMDS = {
                     if (newStatus == AternosStatus.OFFLINE && oldStatus == AternosStatus.IN_QUEUE) {
                         await msg.channel.send('Something went wrong when trying to escape the queue. Maybe an AD is in the way?');
                         await Konsole.console.screenshot({ path: `fail-queue-${+new Date()}.png`});
-                        Konsole.removeHook('serverStatus', onDetectOnline);
-                        Konsole.removeHook('serverStatus', onDetectCrashed);
+                        Konsole.removeHook('serverStatus', onDetectOnlineOrCrashed);
                         Konsole.removeHook('serverStatus', onFailToEscapeQueue);
                     }
                 }
 
-                Konsole.addHook('serverStatus', onDetectOnline);
-                Konsole.addHook('serverStatus', onDetectCrashed);
+                Konsole.addHook('serverStatus', onDetectOnlineOrCrashed);
                 Konsole.addHook('serverStatus', onFailToEscapeQueue);
 
                 await Konsole.requestServerAction(ServerActions.START);
@@ -141,14 +133,18 @@ const BOT_CMDS = {
             if (Konsole.getStatus('serverStatus') == AternosStatus.ONLINE) {
                 await msg.channel.send('Stopping the server...');
 
-                async function onDetectOffline(newStatus) {
-                    if (newStatus == AternosStatus.OFFLINE) {
-                        await msg.channel.send('Server is offline!');
-                        Konsole.removeHook('serverStatus', onDetectOffline);
+                async function onDetectOfflineOrCrashed(newStatus) {
+                    if (newStatus == AternosStatus.OFFLINE || newStatus == AternosStatus.CRASHED) {
+                        if (newStatus == AternosStatus.OFFLINE)
+                            await msg.channel.send('Server is offline!');
+                        else
+                            await msg.channel.send('**WARNING**: Server has crashed! You must wait for the admins to restart the server.');
+                        
+                        Konsole.removeHook('serverStatus', onDetectOfflineOrCrashed);
                     }
                 }
 
-                Konsole.addHook('serverStatus', onDetectOffline);
+                Konsole.addHook('serverStatus', onDetectOfflineOrCrashed);
 
                 await Konsole.requestServerAction(ServerActions.STOP);
             } else {
@@ -169,18 +165,21 @@ const BOT_CMDS = {
                 // which causes the bot to immediately respond with 'Server is online!'
                 // This is because the server status isn't immediately updated when the restart button is pressed.
                 let firstTrigger = true;
-                async function onDetectOnline(newStatus) {
+                async function onDetectOnlineOrCrashed(newStatus) {
                     if (newStatus == AternosStatus.ONLINE) {
                         if (firstTrigger)
                             firstTrigger = false;
                         else {
                             await msg.channel.send('Server is online!');
-                            Konsole.removeHook('serverStatus', onDetectOnline);
+                            Konsole.removeHook('serverStatus', onDetectOnlineOrCrashed);
                         }
+                    } else if (newStatus == AternosStatus.CRASHED) {
+                        await msg.channel.send('**WARNING**: Server has crashed! You must wait for the admins to restart the server.');
+                        Konsole.removeHook('serverStatus', onDetectOnlineOrCrashed);
                     }
                 }
 
-                Konsole.addHook('serverStatus', onDetectOnline);
+                Konsole.addHook('serverStatus', onDetectOnlineOrCrashed);
 
                 await Konsole.requestServerAction(ServerActions.RESTART);
             } else {

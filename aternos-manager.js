@@ -253,6 +253,7 @@ class AternosManager extends StatusTrackerMap {
     async checkMemoryUsage() {
         const usageStats = await pidusage(this.browserPID());
         if (usageStats.memory > MAX_MEMORY_ALLOWED) {
+            console.log('Konsole: Restarting to free memory...');
             await this.cleanup(true);
             await this.initialize();
         }
