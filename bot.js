@@ -265,7 +265,10 @@ const BOT_CMDS = {
                 onStart: async () => await msg.channel.send(`Creating backup of the universe as we speak...`),
                 onFinish: async () => {
                     await msg.channel.send('The backup has finished!');
-                    await BOT_CMDS.ListBackups.execute(msg);
+                    
+                    const { quotaUsage, backupFiles } = await Konsole.listBackups();
+                    const recentBackupFile = backupFiles[0];
+                    await msg.channel.send(`Backup info: **${recentBackupFile.name}** - *${recentBackupFile.datetime}*`);
                 },
                 onFail: async errMsg => await msg.channel.send(`**Warning**: ${errMsg}`),
             });
@@ -273,7 +276,7 @@ const BOT_CMDS = {
     },
     DeleteBackup: {
         name: 'delete backup',
-        description: 'Delets a backup at the given position on the list of backups.',
+        description: 'Deletes a backup at the given position on the list of backups.',
         adminOnly: true,
         acceptsArgs: true,
         async execute(msg, args) {
