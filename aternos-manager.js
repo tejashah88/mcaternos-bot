@@ -378,14 +378,11 @@ class AternosManager extends StatusTrackerMap {
 
         let startedBackup = false;
         async function processBackupProgress(wsPayload) {
-            const { type, message: msgStr } = JSON.parse(wsPayload.response.payloadData);
-            console.log('DEBUG');
-            console.log(msgStr);
-            console.log(typeof msgStr);
-            console.log('DEBUG');
-            const msg = JSON.parse(msgStr);
+            const payload = JSON.parse(wsPayload.response.payloadData);
 
-            if (type == "backup_progress") {
+            if (!!payload.type && payload.type == "backup_progress") {
+                const msg = JSON.parse(payload.message);
+
                 if (startedBackup === false) {
                     startedBackup = true;
                     await onStart();
