@@ -337,11 +337,29 @@ class BotCommander {
                     args = cmdString.substring((command + ' ').length).split('"').filter(e => !!e);
                 }
 
-                cmd.execute(msg, args)
-                    .catch(error => {
+                async function executeCommand() {
+                    try {
+                        await cmd.execute(msg, args);
+                    } catch (err) {
                         console.error(error);
-                        return msg.channel.send('There was an error trying to execute that command!');
-                    });
+                        await msg.channel.send('There was an error trying to execute that command!');
+                    }
+                }
+
+                // Edge case: When Aternos Manager isn't quite ready, let's add a hook to make sure it'll execute the given command once it is
+                async function executeCommandWhenReady(newStatus) {
+                    if (Konsole.isReady()) {
+                        // No need for retriggers
+                        Konsole.removeHook('managerStatus', executeCommandWhenReady);
+
+                        await executeCommand();
+                    }
+                }
+
+                if (!Konsole.isReady())
+                    Konsole.addHook('managerStatus', executeCommandWhenReady);
+                else
+                    await executeCommand();
             }
         }
 
