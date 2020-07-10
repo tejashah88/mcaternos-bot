@@ -169,7 +169,7 @@ const BOT_CMDS = {
 
                 await Konsole.restartServer();
                 await msg.channel.send('Restarting the server...');
-                
+
                 Konsole.addHook('serverStatus', onDetectOnlineOrCrashed);
             } else {
                 await msg.channel.send(`Server is not online! It is ${Konsole.getStatus('serverStatus')}.`);
@@ -278,6 +278,31 @@ const BOT_CMDS = {
                 onFail: async errMsg => await msg.channel.send(`**Warning**: ${errMsg}`),
             });
         }
+    },
+    PruneOldBackups: {
+        name: 'prune backups',
+        description: 'Deletes any old backups that contribute to exceeding backup limit.',
+        adminOnly: true,
+        acceptsArgs: false,
+        async execute(msg, args) {
+            let numBackups = (await Konsole.listBackups()).backupFiles.length;
+            const BACKUP_FILES_LIMIT = parseInt(config.aternos.BACKUP_LIMIT);
+
+            if (numBackups <= BACKUP_FILES_LIMIT) {
+                await msg.channel.send('There are no old backups to delete!');
+            } else {
+                const numBackupsToDelete = numBackups - BACKUP_FILES_LIMIT;
+                await msg.channel.send(`There are ${numBackupsToDelete} old backup(s) to delete! This may take a while...`);
+
+                while (numBackups > BACKUP_FILES_LIMIT) {
+                    await Konsole.deleteOldestBackup();
+                    numBackups = (await Konsole.listBackups()).backupFiles.length;
+                }
+
+                await msg.channel.send(`Finished deleting ${numBackupsToDelete} old backup(s).`);
+                await BOT_CMDS.ListBackups.execute(msg);
+            }
+        }
     }
 };
 
@@ -341,7 +366,7 @@ class BotCommander {
                     try {
                         await cmd.execute(msg, args);
                     } catch (err) {
-                        console.error(error);
+                        console.error(err);
                         await msg.channel.send('There was an error trying to execute that command!');
                     }
                 }
