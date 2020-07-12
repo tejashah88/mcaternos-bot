@@ -305,6 +305,7 @@ class AternosManager extends StatusTrackerMap {
         // the bot from confirming the starting process, so it'll try to close it
         await delay(1000);
         await this.console.evaluate(() => hideAlert());
+        await delay(1000);
         
         // Wait until we know for sure that the server is indeed starting up before letting go
         await this.waitForStatusLogic(
