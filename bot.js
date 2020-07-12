@@ -542,7 +542,20 @@ bot.on('message', async msg => {
         if (command.length <= 0)
             return;
 
-        console.info(`${isAdminUser ? 'Admin' : 'User'} '${msg.author.tag}' attempted to send command '${command}'`);
+        let userType, fromWhere;
+        if (isAdminUser)
+            userType = 'Admin';
+        else
+            userType = 'User';
+
+        if (msg.channel instanceof Discord.TextChannel)
+            fromWhere = `'${msg.channel.name}' channel under '${msg.channel.guild.name}' server`;
+        else if (msg.channel instanceof Discord.DMChannel)
+            fromWhere = `direct message channel`;
+        else
+            fromWhere = `unknown location in Discord space. (${typeof msg.channel})`
+
+        console.info(`${userType} '${msg.author.tag}' attempted to send command '${command}' from ${fromWhere}`);
         await cmder.parseAndExecute(msg);
     }
 });
