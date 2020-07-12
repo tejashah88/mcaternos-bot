@@ -7,6 +7,10 @@ process.env.TZ = 'America/Los_Angeles';
 
 require('make-promises-safe');
 
+require('console-stamp')(console, { 
+    format: ':date(mm/dd/yyyy HH:MM:ss.l).cyan' 
+});
+
 // Initialize libraries and variables
 const CONFIG_FILE = './config.ini';
 
@@ -494,7 +498,7 @@ async function handleBackupGeneration(newStatus, oldStatus, forceUpdate) {
         const dateHash = parseInt(+new Date / 1000).toString(16);       // A base-16 time-based hash based on number of seconds since start of epoch
         await Konsole.createBackup(`Automatic backup @ ${dateOfBackup} - ${dateHash}`);
         
-        const numBackups = (await Konsole.listBackups()).backupFiles.length;
+        let numBackups = (await Konsole.listBackups()).backupFiles.length;
         const BACKUP_FILES_LIMIT = parseInt(config.aternos.BACKUP_LIMIT);
 
         console.log('Konsole: Deleting oldest backup(s) to maintain backup limit...');
