@@ -356,6 +356,28 @@ class BotCommander {
                     return;
                 }
 
+                if (!isAdminUser) {
+                    const isRightChannelType = msg.channel instanceof Discord.TextChannel;
+                    
+                    if (!isRightChannelType) {
+                        await msg.channel.send(`You can only talk to me in the #${msg.channel.name} channel in the ${msg.channel.guild.name} server!`);
+                        return;
+                    }
+
+                    const isRightTargetServer = msg.channel.guild.name == config.discord.SERVER_NAME;
+                    const isRightTargetChannel = msg.channel.name == config.discord.CHANNEL_NAME;
+
+                    if (!isRightTargetServer) {
+                        await msg.channel.send(`You can only talk to me in the #${msg.channel.name} channel in the ${msg.channel.guild.name} server!`);
+                        return;
+                    }
+
+                    if (!isRightTargetChannel) {
+                        await msg.channel.send(`You can only talk to me in the #${msg.channel.name} channel in this server!`);
+                        return;
+                    }
+                }
+
                 const command = cmd.name;
                 let args;
 
