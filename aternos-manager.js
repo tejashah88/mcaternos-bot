@@ -140,16 +140,6 @@ class AternosManager extends StatusTrackerMap {
         if (!restarting)
             this.removeAllListeners();
 
-        if (this.backupPage != null) {
-            await this.backupPage.close();
-            this.backupPage = null;
-        }
-
-        if (this.console != null) {
-            await this.console.close();
-            this.console = null;
-        }
-
         if (this.browser != null) {
             await this.browser.close();
             this.browser = null;
