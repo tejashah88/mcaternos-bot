@@ -360,7 +360,7 @@ class BotCommander {
                     const isRightChannelType = msg.channel instanceof Discord.TextChannel;
                     
                     if (!isRightChannelType) {
-                        await msg.channel.send(`You can only talk to me in the #${msg.channel.name} channel in the ${msg.channel.guild.name} server!`);
+                        await msg.channel.send(`You can only talk to me in the #${config.discord.CHANNEL_NAME} channel in the ${config.discord.SERVER_NAME} server!`);
                         return;
                     }
 
@@ -368,12 +368,12 @@ class BotCommander {
                     const isRightTargetChannel = msg.channel.name == config.discord.CHANNEL_NAME;
 
                     if (!isRightTargetServer) {
-                        await msg.channel.send(`You can only talk to me in the #${msg.channel.name} channel in the ${msg.channel.guild.name} server!`);
+                        await msg.channel.send(`You can only talk to me in the #${config.discord.CHANNEL_NAME} channel in the ${config.discord.SERVER_NAME} server!`);
                         return;
                     }
 
                     if (!isRightTargetChannel) {
-                        await msg.channel.send(`You can only talk to me in the #${msg.channel.name} channel in this server!`);
+                        await msg.channel.send(`You can only talk to me in the #${config.discord.CHANNEL_NAME} channel in this server!`);
                         return;
                     }
                 }
