@@ -359,21 +359,24 @@ class BotCommander {
                 if (!isAdminUser) {
                     const isRightChannelType = msg.channel instanceof Discord.TextChannel;
 
+                    const targetServer = bot.guilds.resolve(config.discord.SERVER_ID);
+                    const targetChannel = targetServer.channels.resolve(config.discord.CHANNEL_ID);
+
                     if (!isRightChannelType) {
-                        await msg.channel.send(`You can only talk to me in the **#${config.discord.CHANNEL_NAME}** channel in the *${config.discord.SERVER_NAME}* server!`);
+                        await msg.channel.send(`You can only talk to me in the **#${targetChannel.name}** channel in the *${targetServer.name}* server!`);
                         return;
                     }
 
-                    const isRightTargetServer = msg.channel.guild.name == config.discord.SERVER_NAME;
-                    const isRightTargetChannel = msg.channel.name == config.discord.CHANNEL_NAME;
+                    const isRightTargetServer = msg.guild.id == config.discord.SERVER_ID;
+                    const isRightTargetChannel = msg.channel.id == config.discord.CHANNEL_ID;
 
                     if (!isRightTargetServer) {
-                        await msg.channel.send(`You can only talk to me in the **#${config.discord.CHANNEL_NAME}** channel in the *${config.discord.SERVER_NAME}* server!`);
+                        await msg.channel.send(`You can only talk to me in the **#${targetChannel.name}** channel in the *${targetServer.name}* server!`);
                         return;
                     }
 
                     if (!isRightTargetChannel) {
-                        await msg.channel.send(`You can only talk to me in the **#${config.discord.CHANNEL_NAME}** channel in this server!`);
+                        await msg.channel.send(`You can only talk to me in the **#${targetChannel.name}** channel in this server!`);
                         return;
                     }
                 }
