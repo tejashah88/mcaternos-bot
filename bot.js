@@ -298,10 +298,7 @@ const BOT_CMDS = {
                 const numBackupsToDelete = numBackups - BACKUP_FILES_LIMIT;
                 await msg.channel.send(`There are ${numBackupsToDelete} old backup(s) to delete! This may take a while...`);
 
-                while (numBackups > BACKUP_FILES_LIMIT) {
-                    await Konsole.deleteOldestBackup();
-                    numBackups = (await Konsole.listBackups()).backupFiles.length;
-                }
+                await Konsole.pruneOldBackups();
 
                 await msg.channel.send(`Finished deleting ${numBackupsToDelete} old backup(s).`);
                 await BOT_CMDS.ListBackups.execute(msg);
@@ -352,7 +349,7 @@ class BotCommander {
 
                 // Can't let anyone run bot commands when in maintenance mode
                 if (Konsole.isInMaintenance() && !isAdminUser) {
-                    await msg.channel.send('**ALERT**: Bot is in maintenance mode and will ignore you unless told otherwise by the server admins!');
+                    await msg.channel.send('**ALERT**: Bot is in maintenance mode! Only admins can run commands.');
                     return;
                 }
 
@@ -515,22 +512,15 @@ async function updateBotStatus(newFullStatus) {
     console.log('NOTICE:', outputMsg);
 }
 
-async function handleBackupGeneration(newStatus, oldStatus, forceUpdate) {
+async function handleBackupGenerationOffline(newStatus, oldStatus, forceUpdate) {
     if (newStatus == AternosStatus.OFFLINE && oldStatus != null && !forceUpdate) {
+        // Create auto-backup
         console.log('Konsole: Creating backup now that server is offline...');
+        await Konsole.makeAutoBackup();
 
-        const dateOfBackup = new Date().toLocaleString().split(',')[0]; // Just the date in MM/DD/YYYY
-        const dateHash = parseInt(+new Date / 1000).toString(16);       // A base-16 time-based hash based on number of seconds since start of epoch
-        await Konsole.createBackup(`Automatic backup @ ${dateOfBackup} - ${dateHash}`);
-        
-        let numBackups = (await Konsole.listBackups()).backupFiles.length;
-        const BACKUP_FILES_LIMIT = parseInt(config.aternos.BACKUP_LIMIT);
-
+        // Delete old-backups
         console.log('Konsole: Deleting oldest backup(s) to maintain backup limit...');
-        while (numBackups > BACKUP_FILES_LIMIT) {
-            await Konsole.deleteOldestBackup();
-            numBackups = (await Konsole.listBackups()).backupFiles.length;
-        }
+        await Konsole.pruneOldBackups();
     }
 }
 
@@ -595,7 +585,7 @@ bot.on('message', async msg => {
         Konsole.addHook('fullServerStatus', updateBotStatus);
 
         // Attach listener for triggering backups when server becomes offline
-        Konsole.addHook('serverStatus', handleBackupGeneration);
+        Konsole.addHook('serverStatus', handleBackupGenerationOffline);
 
         // Attach listener for maintenance status update
         Konsole.addHook('maintenanceStatus', onMaintenanceStatusUpdate)

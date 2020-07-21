@@ -6,6 +6,12 @@ const { clearIntervalAsync } = require('set-interval-async');
 const puppeteer = require('puppeteer');
 const pidusage = require('pidusage');
 const delay = require('delay');
+const cron = require('node-cron');
+
+// Initialize libraries and variables
+const CONFIG_FILE = './config.ini';
+const ini = require('ini');
+const config = ini.parse(fs.readFileSync(CONFIG_FILE, 'utf-8'));
 
 const { StatusTrackerMap } = require('./status-tracker');
 
@@ -18,6 +24,7 @@ const ATERNOS_BACKUP_URL        = 'https://aternos.org/backups/';
 const STATUS_UPDATE_INTERVAL = 5000;               // 5 seconds
 const MAX_MEMORY_ALLOWED = 2 * 1024 * 1024 * 1024; // 2 GB
 const DEFAULT_STATUS_LOGIC_WAIT = 30000;           // 30 seconds
+const BACKUP_CRON_STRING = '0 */2 * * *';          // every two hours
 
 const MAINTENANCE_LOCK_FILE = 'maintenance.lock';
 
@@ -68,6 +75,7 @@ class AternosManager extends StatusTrackerMap {
         this.console = null;
         this.backupPage = null;
         this.statusLoop = null;
+        this.backupCron = null;
 
         this.url = options.server;
         this.user = options.username;
@@ -108,10 +116,19 @@ class AternosManager extends StatusTrackerMap {
         await this.listBackups();
 
         console.log('Konsole: Starting status and memory scanning loop...');
-        this.statusLoop = setIntervalAsync(async () => {
-            await this.checkStatus();
-            await this.checkMemoryUsage();
-        }, STATUS_UPDATE_INTERVAL);
+        if (!this.statusLoop) {
+            this.statusLoop = setIntervalAsync(async () => {
+                await this.checkStatus();
+                await this.checkMemoryUsage();
+            }, STATUS_UPDATE_INTERVAL);
+        }
+
+        if (!this.backupCron) {
+            this.backupCron = cron.schedule(BACKUP_CRON_STRING, this.generateAutoBackupWhileOnline, { scheduled: false });
+        }
+
+        console.log('Konsole: Starting backup cron for every 2 hours...');
+        this.backupCron.start();
 
         // Set maintenance mode
         if (fs.existsSync(MAINTENANCE_LOCK_FILE)) {
@@ -127,9 +144,13 @@ class AternosManager extends StatusTrackerMap {
         if (restarting) {
             console.log('Konsole: Restarting console page...');
             this.setStatus('managerStatus', ManagerStatus.RESTARTING);
+            if (!!this.backupCron)
+                this.backupCron.stop();
         } else {
             console.log('Konsole: Stopping console page...');
             this.setStatus('managerStatus', ManagerStatus.STOPPING);
+            if (!!this.backupCron)
+                this.backupCron.destroy();
         }
 
         if (this.statusLoop != null) {
@@ -444,6 +465,34 @@ class AternosManager extends StatusTrackerMap {
         const { backupFiles } = await this.listBackups();
         const lastBackupIndex = backupFiles.length - 1;
         await this._deleteBackupByIndex(lastBackupIndex, { onStart, onFinish, onFail });
+    }
+
+    async makeAutoBackup() {
+        const dateOfBackup = new Date().toLocaleString().split(',')[0]; // Just the date in MM/DD/YYYY
+        const dateHash = parseInt(+new Date / 1000).toString(16);       // A base-16 time-based hash based on number of seconds since start of epoch
+        await this.createBackup(`Automatic backup @ ${dateOfBackup} - ${dateHash}`);
+    }
+
+    async pruneOldBackups() {
+        let numBackups = (await this.listBackups()).backupFiles.length;
+        const BACKUP_FILES_LIMIT = parseInt(config.aternos.BACKUP_LIMIT);
+
+        while (numBackups > BACKUP_FILES_LIMIT) {
+            await this.deleteOldestBackup();
+            numBackups = (await this.listBackups()).backupFiles.length;
+        }
+    }
+
+    async generateAutoBackupWhileOnline() {
+        if (this.getStatus('serverStatus') == AternosStatus.ONLINE) {
+            // Create auto-backup
+            console.log('Konsole: Creating backup while server is online...');
+            await this.makeAutoBackup();
+
+            // Delete old-backups
+            console.log('Konsole: Deleting oldest backup(s) to maintain backup limit...');
+            await this.pruneOldBackups();
+        }
     }
 }
 
