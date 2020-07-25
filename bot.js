@@ -117,6 +117,7 @@ const BOT_CMDS = {
                     }
                 }
 
+                await msg.channel.send('Requesting to start the server...');
                 await Konsole.startServer();
                 await msg.channel.send('Starting the server...');
 
@@ -145,6 +146,7 @@ const BOT_CMDS = {
                     }
                 }
 
+                await msg.channel.send('Requesting to stop the server...');
                 await Konsole.stopServer();
                 await msg.channel.send('Stopping the server...');
 
@@ -171,6 +173,7 @@ const BOT_CMDS = {
                     }
                 }
 
+                await msg.channel.send('Requesting to restart the server...');
                 await Konsole.restartServer();
                 await msg.channel.send('Restarting the server...');
 
