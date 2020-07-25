@@ -124,7 +124,9 @@ class AternosManager extends StatusTrackerMap {
         }
 
         if (!this.backupCron) {
-            this.backupCron = cron.schedule(BACKUP_CRON_STRING, this.generateAutoBackupWhileOnline, { scheduled: false });
+            this.backupCron = cron.schedule(BACKUP_CRON_STRING, (function (that) {
+                that.generateAutoBackupWhileOnline(that);
+            })(this), { scheduled: false });
         }
 
         console.log('Konsole: Starting backup cron for every 2 hours...');
@@ -483,15 +485,15 @@ class AternosManager extends StatusTrackerMap {
         }
     }
 
-    async generateAutoBackupWhileOnline() {
-        if (this.getStatus('serverStatus') == AternosStatus.ONLINE) {
+    async generateAutoBackupWhileOnline(that) {
+        if (that.getStatus('serverStatus') == AternosStatus.ONLINE) {
             // Create auto-backup
             console.log('Konsole: Creating backup while server is online...');
-            await this.makeAutoBackup();
+            await that.makeAutoBackup();
 
             // Delete old-backups
             console.log('Konsole: Deleting oldest backup(s) to maintain backup limit...');
-            await this.pruneOldBackups();
+            await that.pruneOldBackups();
         }
     }
 }
