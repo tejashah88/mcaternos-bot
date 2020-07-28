@@ -58,6 +58,10 @@ class StatusTracker extends EventEmitter {
     }
 
     waitForStatusLogic(checkPredicate, timeout) {
+        // Check if the status is already satisfying the check predicate
+        if (checkPredicate(this.get()))
+            return;
+
         const that = this;
 
         if (timeout <= 0)

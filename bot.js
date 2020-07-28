@@ -438,8 +438,13 @@ async function updateBotStatus(newFullStatus) {
         case AternosStatus.ONLINE: {
             const reservedSpots = parseInt(playersOnline.split('/')[0]);
             if (reservedSpots === 0) {
-                discordStatus = `Online: ${playersOnline} - ${queueEta}`;
-                outputMsg = `The server is online with ${playersOnline} players and ${queueEta} left!`;
+                discordStatus = `Online: ${playersOnline}`;
+                outputMsg = `The server is online with ${playersOnline} players`;
+
+                if (!!queueEta) {
+                    discordStatus += ` - ${queueEta}`;
+                    outputMsg += ` and ${queueEta} left!`;
+                }
             } else {
                 discordStatus = `Online: ${playersOnline}`;
                 outputMsg = `The server is online with ${playersOnline} players!`;
