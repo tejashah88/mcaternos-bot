@@ -326,8 +326,18 @@ class AternosManager extends StatusTrackerMap {
         // The notifications alert will pop up whenever the server starting is in queue and it'll prevent
         // the bot from confirming the starting process, so it'll try to close it
         await delay(1000);
-        await this.console.evaluate(() => hideAlert());
-        await delay(1000);
+        // HACK: Figure out better strategy to get rid of notifications alert
+        for (let i = 0; i < 5; i++) {
+            await this.console.evaluate(() => hideAlert());
+            await delay(1000);
+        }
+
+        try {
+            await this.console.click('#start');
+            console.error("DAMMIT! the alert isn't disappearing!!!")
+        } catch (e) {
+            // Ignore, meaning that the start button has been pressed
+        }
         
         // Wait until we know for sure that the server is indeed starting up before letting go
         await this.waitForStatusLogic(
