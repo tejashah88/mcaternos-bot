@@ -125,7 +125,7 @@ class AternosManager extends StatusTrackerMap {
 
         if (!this.backupCron) {
             let that = this;
-            this.backupCron = cron.schedule(BACKUP_CRON_STRING, function() {
+            this.backupCron = cron.schedule(BACKUP_CRON_STRING, async function() {
                 if (that.getStatus('serverStatus') == AternosStatus.ONLINE) {
                     // Create auto-backup
                     console.log('Konsole: Creating backup while server is online...');
