@@ -1,3 +1,11 @@
+:warning: :warning: New maintainer needed :warning: :warning:
+
+For anyone visiting this project, this bot does not work with the current version of Aternos's website (October 2021) as this bot was created about a year ago. I don't use Aternos and I haven't had the time nor the motivation to maintain this project despite noticing increased interest in the project. If you're interested in becoming an active maintainer, feel free to submit PRs to update the bot.
+
+Thank you
+
+@tejashah88
+
 # mcaternos-bot
 A bot that lets your friends start your Aternos server without leaving Discord.
 
